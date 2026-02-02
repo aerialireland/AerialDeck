@@ -188,21 +188,7 @@
     .card-drones { grid-column: span 3; grid-row: span 2; }
     .card-map { grid-column: span 6; grid-row: span 2; padding: 0; overflow: hidden; }
     .card-pilothours { grid-column: span 3; }
-    .card-audit { grid-column: span 4; }
-    .audit-progress-container { margin-bottom: 1rem; }
-    .audit-progress-label { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
-    .audit-progress-label .title { font-size: 0.8rem; font-weight: 600; color: var(--text-primary); }
-    .audit-progress-label .percent { font-size: 1.2rem; font-weight: 700; color: var(--accent-dark); }
-    .audit-progress-bar { height: 12px; background: var(--border-light); border-radius: 6px; overflow: hidden; }
-    .audit-progress-fill { height: 100%; background: linear-gradient(90deg, #4a8550, #6ba671); border-radius: 6px; transition: width 0.5s ease; }
-    .audit-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-    .audit-card { background: var(--bg-secondary); border-radius: 10px; padding: 0.75rem; }
-    .audit-card h4 { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 0.5rem; }
-    .audit-score { font-size: 1.5rem; font-weight: 700; color: var(--accent-dark); }
-    .audit-score-sub { font-size: 0.7rem; color: var(--text-muted); }
-    .audit-incomplete-list { max-height: 80px; overflow: hidden; }
-    .audit-incomplete-item { font-size: 0.7rem; color: var(--text-secondary); padding: 0.2rem 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .audit-incomplete-item .missing { color: #dc2626; font-weight: 500; }
+    .card-fts { grid-column: span 2; }
     .card-modes { grid-column: span 2; }
     .card-avgtime { grid-column: span 2; }
     .card-batteries { grid-column: span 5; }
@@ -1645,30 +1631,9 @@
             }).join('')}
           </div>
         </div>
-        <div class="bento-card card-audit" id="auditBusterCard">
-          <h3>Audit Buster</h3>
-          <div class="audit-progress-container">
-            <div class="audit-progress-label">
-              <span class="title">Overall Compliance</span>
-              <span class="percent" id="auditPercent">--</span>
-            </div>
-            <div class="audit-progress-bar">
-              <div class="audit-progress-fill" id="auditProgressFill" style="width:0%;"></div>
-            </div>
-          </div>
-          <div class="audit-cards">
-            <div class="audit-card">
-              <h4>Fully Compliant</h4>
-              <div class="audit-score" id="auditCompliantCount">--</div>
-              <div class="audit-score-sub" id="auditCompliantSub">of -- plans</div>
-            </div>
-            <div class="audit-card">
-              <h4>Incomplete Plans</h4>
-              <div class="audit-incomplete-list" id="auditIncompleteList">
-                <div style="color:var(--text-muted);font-size:0.7rem;">Loading...</div>
-              </div>
-            </div>
-          </div>
+        <div class="bento-card card-fts">
+          <h3>FTS Tests</h3>
+          <div class="value" style="font-size:2.5rem;">${stats.ftsActivations || 0}</div>
         </div>
         <div class="bento-card card-modes">
           <h3>Flight Modes</h3>
@@ -1725,126 +1690,6 @@
           </div>
         </div>
       `;
-
-      // Load evidence for all flight plans and update Audit Buster
-      loadAllEvidenceAndUpdateAudit();
-    }
-
-    // Store evidence for all flight plans
-    let allPlansEvidence = {};
-
-    // Load evidence for all flight plans and calculate compliance
-    async function loadAllEvidenceAndUpdateAudit() {
-      try {
-        // Load evidence for each flight plan
-        const evidencePromises = flightPlans.map(async (plan) => {
-          try {
-            const res = await safeFetch(`/api/flight-plans/${plan.id}/evidence`);
-            return { planId: plan.id, evidence: res };
-          } catch (err) {
-            return { planId: plan.id, evidence: null };
-          }
-        });
-
-        const results = await Promise.all(evidencePromises);
-        results.forEach(r => {
-          if (r.evidence) {
-            allPlansEvidence[r.planId] = r.evidence;
-          }
-        });
-
-        updateAuditBuster();
-      } catch (err) {
-        console.error('Error loading evidence for audit:', err);
-      }
-    }
-
-    // Calculate compliance for a single flight plan
-    function calculatePlanCompliance(planId) {
-      const evidence = allPlansEvidence[planId] || {};
-      const planLogs = flightLogs.filter(l => l.flight_plan_id === planId);
-
-      // 11 compliance items
-      const items = {
-        flightLogs: planLogs.length > 1,
-        crewAssignment: !!(evidence.planning?.pilotInCommand),
-        airspaceZones: (evidence.airspaceZones?.length || 0) > 0,
-        operationMap: (evidence.flightGeography?.length || 0) > 0,
-        flightParams: !!(evidence.flightGeographyData?.latitude && evidence.flightGeographyData?.maxHeight),
-        emergencyPlan: (evidence.emergencyResponsePlan?.length || 0) > 0,
-        weather: (evidence.weather?.length || 0) > 0,
-        nearbyEvents: (evidence.nearbyEvents?.length || 0) > 0,
-        notams: (evidence.notams?.length || 0) > 0,
-        uf101Permission: (evidence.uf101Permission?.length || 0) > 0,
-        uf101Application: (evidence.uf101Application?.length || 0) > 0
-      };
-
-      const completed = Object.values(items).filter(Boolean).length;
-      const total = 11;
-      const percentage = Math.round((completed / total) * 100);
-
-      // Find what's missing
-      const missing = [];
-      if (!items.flightLogs) missing.push('Flight Logs');
-      if (!items.crewAssignment) missing.push('Crew');
-      if (!items.airspaceZones) missing.push('Airspace');
-      if (!items.operationMap) missing.push('Op Map');
-      if (!items.flightParams) missing.push('Params');
-      if (!items.emergencyPlan) missing.push('ERP');
-      if (!items.weather) missing.push('Weather');
-      if (!items.nearbyEvents) missing.push('Events');
-      if (!items.notams) missing.push('NOTAMs');
-      if (!items.uf101Permission) missing.push('UF101 Perm');
-      if (!items.uf101Application) missing.push('UF101 App');
-
-      return { completed, total, percentage, missing, isFullyCompliant: completed === total };
-    }
-
-    // Update the Audit Buster display
-    function updateAuditBuster() {
-      let totalCompleted = 0;
-      let totalItems = 0;
-      let fullyCompliant = 0;
-      const incompletePlans = [];
-
-      flightPlans.forEach(plan => {
-        const compliance = calculatePlanCompliance(plan.id);
-        totalCompleted += compliance.completed;
-        totalItems += compliance.total;
-
-        if (compliance.isFullyCompliant) {
-          fullyCompliant++;
-        } else {
-          incompletePlans.push({
-            name: plan.name,
-            missing: compliance.missing,
-            percentage: compliance.percentage
-          });
-        }
-      });
-
-      const overallPercent = totalItems > 0 ? Math.round((totalCompleted / totalItems) * 100) : 0;
-
-      // Update UI
-      document.getElementById('auditPercent').textContent = overallPercent + '%';
-      document.getElementById('auditProgressFill').style.width = overallPercent + '%';
-      document.getElementById('auditCompliantCount').textContent = fullyCompliant;
-      document.getElementById('auditCompliantSub').textContent = `of ${flightPlans.length} plans`;
-
-      // Update incomplete list (show top 3-4 incomplete plans)
-      const incompleteList = document.getElementById('auditIncompleteList');
-      if (incompletePlans.length === 0) {
-        incompleteList.innerHTML = '<div style="color:var(--accent);font-size:0.75rem;font-weight:600;">✓ All plans compliant!</div>';
-      } else {
-        // Sort by percentage (lowest first) and show top few
-        incompletePlans.sort((a, b) => a.percentage - b.percentage);
-        const toShow = incompletePlans.slice(0, 4);
-        incompleteList.innerHTML = toShow.map(p => {
-          const shortName = p.name.length > 18 ? p.name.substring(0, 16) + '...' : p.name;
-          const missingCount = p.missing.length;
-          return `<div class="audit-incomplete-item">${esc(shortName)} <span class="missing">(${missingCount} missing)</span></div>`;
-        }).join('');
-      }
     }
 
     function initMap() {
