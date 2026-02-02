@@ -1,0 +1,31 @@
+{
+  "name": "aerialdeck",
+  "version": "1.0.0",
+  "description": "AerialDeck - Flight plans and logs dashboard",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "aerialdeck",
+    "drone",
+    "dashboard",
+    "flight-logs",
+    "aerial"
+  ],
+  "author": "Green Graph Adore LTD",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.93.3",
+    "csv-parse": "^6.1.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "multer": "^2.0.2",
+    "sql.js": "^1.13.0"
+  }
+}
