@@ -188,22 +188,17 @@
     .card-drones { grid-column: span 3; grid-row: span 2; }
     .card-map { grid-column: span 6; grid-row: span 2; padding: 0; overflow: hidden; }
     .card-pilothours { grid-column: span 3; }
-    .card-audit { grid-column: span 3; }
-    .audit-progress-container { margin-bottom: 0.75rem; }
-    .audit-progress-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; }
-    .audit-progress-label .title { font-size: 0.75rem; font-weight: 600; color: var(--text-primary); }
-    .audit-progress-label .percent { font-size: 1rem; font-weight: 700; color: var(--accent-dark); }
-    .audit-progress-bar { height: 10px; background: var(--border-light); border-radius: 5px; overflow: hidden; }
-    .audit-progress-fill { height: 100%; background: linear-gradient(90deg, #4a8550, #6ba671); border-radius: 5px; transition: width 0.5s ease; }
-    .audit-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-    .audit-card { background: var(--bg-secondary); border-radius: 8px; padding: 0.5rem 0.75rem; text-align: center; }
-    .audit-card h4 { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 0.25rem; }
-    .audit-card .value { font-size: 1.25rem; font-weight: 700; }
-    .audit-card .value.compliant { color: var(--accent-dark); }
-    .audit-card .sub { font-size: 0.65rem; color: var(--text-muted); }
-    .audit-incomplete-list { max-height: 70px; overflow: hidden; }
-    .audit-incomplete-item { font-size: 0.65rem; color: var(--text-secondary); padding: 0.15rem 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
-    .audit-incomplete-item .missing { color: #dc2626; font-weight: 500; }
+    .card-audit { grid-column: span 3; background: var(--accent-light); border-color: transparent; display: flex; flex-direction: column; justify-content: center; min-height: 120px; }
+    .audit-progress-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .audit-progress-label .title { font-size: 0.85rem; font-weight: 600; color: var(--text-primary); }
+    .audit-progress-label .percent { font-size: 1.5rem; font-weight: 700; }
+    .audit-progress-bar { height: 28px; background: rgba(255,255,255,0.6); border-radius: 14px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }
+    .audit-progress-fill { height: 100%; border-radius: 14px; transition: width 0.5s ease, background 0.3s ease; }
+    .audit-progress-fill.red { background: linear-gradient(90deg, #dc2626, #ef4444); }
+    .audit-progress-fill.orange { background: linear-gradient(90deg, #ea580c, #f97316); }
+    .audit-progress-fill.green { background: linear-gradient(90deg, #4a8550, #6ba671); }
+    .audit-progress-fill.gold { background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b); background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite; }
+    @keyframes shimmer { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
     .card-modes { grid-column: span 2; }
     .card-avgtime { grid-column: span 2; }
     .card-batteries { grid-column: span 5; }
@@ -1648,27 +1643,12 @@
         </div>
         <div class="bento-card card-audit" id="auditBusterCard">
           <h3>Audit Buster</h3>
-          <div class="audit-progress-container">
-            <div class="audit-progress-label">
-              <span class="title">Overall Compliance</span>
-              <span class="percent" id="auditPercent">--%</span>
-            </div>
-            <div class="audit-progress-bar">
-              <div class="audit-progress-fill" id="auditProgressFill" style="width:0%;"></div>
-            </div>
+          <div class="audit-progress-label">
+            <span class="title">Overall Compliance</span>
+            <span class="percent" id="auditPercent">--%</span>
           </div>
-          <div class="audit-cards">
-            <div class="audit-card">
-              <h4>Fully Compliant</h4>
-              <div class="value compliant" id="auditCompliantCount">--</div>
-              <div class="sub" id="auditCompliantSub">of -- plans</div>
-            </div>
-            <div class="audit-card">
-              <h4>Incomplete Plans</h4>
-              <div class="audit-incomplete-list" id="auditIncompleteList">
-                <div style="color:var(--text-muted);font-size:0.7rem;">Loading...</div>
-              </div>
-            </div>
+          <div class="audit-progress-bar">
+            <div class="audit-progress-fill" id="auditProgressFill" style="width:0%;"></div>
           </div>
         </div>
         <div class="bento-card card-modes">
@@ -1805,45 +1785,36 @@
     function updateAuditBuster() {
       let totalCompleted = 0;
       let totalItems = 0;
-      let fullyCompliant = 0;
-      const incompletePlans = [];
 
       flightPlans.forEach(plan => {
         const compliance = calculatePlanCompliance(plan.id);
         totalCompleted += compliance.completed;
         totalItems += compliance.total;
-
-        if (compliance.isFullyCompliant) {
-          fullyCompliant++;
-        } else {
-          incompletePlans.push({
-            name: plan.name,
-            missing: compliance.missing.length
-          });
-        }
       });
 
       const overallPercent = totalItems > 0 ? Math.round((totalCompleted / totalItems) * 100) : 0;
 
       // Update progress bar
-      document.getElementById('auditPercent').textContent = overallPercent + '%';
-      document.getElementById('auditProgressFill').style.width = overallPercent + '%';
+      const percentEl = document.getElementById('auditPercent');
+      const fillEl = document.getElementById('auditProgressFill');
 
-      // Update compliant count
-      document.getElementById('auditCompliantCount').textContent = fullyCompliant;
-      document.getElementById('auditCompliantSub').textContent = `of ${flightPlans.length} plans`;
+      percentEl.textContent = overallPercent + '%';
+      fillEl.style.width = overallPercent + '%';
 
-      // Update incomplete list
-      const incompleteList = document.getElementById('auditIncompleteList');
-      if (incompletePlans.length === 0) {
-        incompleteList.innerHTML = '<div style="color:var(--accent);font-size:0.7rem;font-weight:600;">✓ All compliant!</div>';
+      // Set color class based on percentage
+      fillEl.classList.remove('red', 'orange', 'green', 'gold');
+      if (overallPercent === 100) {
+        fillEl.classList.add('gold');
+        percentEl.style.color = '#b8860b';
+      } else if (overallPercent >= 66) {
+        fillEl.classList.add('green');
+        percentEl.style.color = '#4a8550';
+      } else if (overallPercent >= 33) {
+        fillEl.classList.add('orange');
+        percentEl.style.color = '#ea580c';
       } else {
-        // Show first few that fit
-        const toShow = incompletePlans.slice(0, 4);
-        incompleteList.innerHTML = toShow.map(p => {
-          const shortName = p.name.length > 16 ? p.name.substring(0, 14) + '...' : p.name;
-          return `<div class="audit-incomplete-item">${esc(shortName)} <span class="missing">(${p.missing})</span></div>`;
-        }).join('');
+        fillEl.classList.add('red');
+        percentEl.style.color = '#dc2626';
       }
     }
 
