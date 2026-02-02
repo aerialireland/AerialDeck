@@ -1,0 +1,2770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>AerialDeck</title>
+  <!-- Version: 2026-02-02-v2 - Force refresh -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f8faf8;
+      --bg-card: #ffffff;
+      --text-primary: #001803;
+      --text-secondary: #3d5a40;
+      --text-muted: #6b8a6e;
+      --accent: #6ba671;
+      --accent-light: #e8f5e9;
+      --accent-dark: #4a8550;
+      --border: #e0e8e0;
+      --border-light: #f0f4f0;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    /* Login Screen */
+    .login-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #001803 0%, #0a2f0a 100%);
+    }
+    .login-box {
+      background: var(--bg-primary);
+      padding: 2.5rem;
+      border-radius: 16px;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+      width: 100%;
+      max-width: 400px;
+    }
+    .login-box h1 { color: var(--accent); margin-bottom: 0.5rem; font-size: 1.75rem; font-weight: 700; }
+    .login-box p { color: var(--text-muted); margin-bottom: 1.5rem; }
+    .login-box input {
+      width: 100%;
+      padding: 0.875rem 1rem;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      font-size: 1rem;
+      margin-bottom: 1rem;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-family: inherit;
+    }
+    .login-box input:focus { outline: none; border-color: var(--accent); }
+    .login-box button {
+      width: 100%;
+      padding: 0.875rem;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+    .login-box button:hover { background: var(--accent-dark); }
+    .login-error { color: #dc2626; font-size: 0.875rem; margin-bottom: 1rem; display: none; }
+
+    /* Dashboard */
+    .dashboard { display: none; }
+    .dashboard.active { display: block; }
+
+    .header {
+      background: var(--bg-primary);
+      padding: 0.75rem calc((100% - 1600px) / 2 + 1.5rem);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+    .header h1 { font-size: 1.25rem; color: var(--accent); font-weight: 700; }
+    .header-logo { height: 44px; width: auto; }
+    .header-actions { display: flex; gap: 1rem; align-items: center; }
+    .search-box {
+      display: flex;
+      align-items: center;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+    }
+    .search-box input {
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 0.875rem;
+      width: 200px;
+      outline: none;
+      font-family: inherit;
+    }
+    .search-box input::placeholder { color: var(--text-muted); }
+    .logout-btn {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+    .logout-btn:hover { background: var(--border); }
+
+    .demo-banner {
+      background: linear-gradient(90deg, var(--accent), var(--accent-dark));
+      color: white;
+      text-align: center;
+      padding: 0.5rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .main-content { padding: 1.5rem; max-width: 1600px; margin: 0 auto; }
+
+    /* Bento Grid */
+    .bento-grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      grid-template-rows: auto;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .bento-card {
+      background: var(--bg-card);
+      border-radius: 16px;
+      padding: 1.25rem;
+      border: 1px solid var(--border);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .bento-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0,24,3,0.08);
+    }
+    .bento-card h3 {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+    }
+    .bento-card .value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+    .bento-card .unit { font-size: 0.875rem; color: var(--text-muted); font-weight: 500; }
+
+    /* Card sizes */
+    .card-flights { grid-column: span 2; background: var(--accent-light); border-color: transparent; }
+    .card-plans { grid-column: span 2; }
+    .card-time { grid-column: span 2; background: #f0ffff; border-color: #a5f3fc; }
+    .card-time h3, .card-time .value { color: #0e7490; }
+    .card-time .unit { color: #0891b2; }
+    .card-pilots { grid-column: span 3; grid-row: span 2; }
+    .card-drones { grid-column: span 3; grid-row: span 2; }
+    .card-map { grid-column: span 6; grid-row: span 2; padding: 0; overflow: hidden; }
+    .card-pilothours { grid-column: span 3; }
+    .card-audit { grid-column: span 3; background: var(--accent-light); border-color: transparent; display: flex; flex-direction: column; justify-content: center; min-height: 120px; }
+    .audit-progress-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .audit-progress-label .title { font-size: 0.85rem; font-weight: 600; color: var(--text-primary); }
+    .audit-progress-label .percent { font-size: 1.5rem; font-weight: 700; }
+    .audit-progress-bar { height: 28px; background: rgba(255,255,255,0.6); border-radius: 14px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }
+    .audit-progress-fill { height: 100%; border-radius: 14px; transition: width 0.5s ease, background 0.3s ease; }
+    .audit-progress-fill.red { background: linear-gradient(90deg, #f8a5a5, #fbc4c4); }
+    .audit-progress-fill.orange { background: linear-gradient(90deg, #fbd5a5, #fde6c4); }
+    .audit-progress-fill.green { background: linear-gradient(90deg, #4a8550, #6ba671); }
+    .audit-progress-fill.gold { background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b); background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite; }
+    @keyframes shimmer { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+
+    /* Mini compliance progress bar for flight plan rows */
+    .compliance-mini { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; }
+    .compliance-mini-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+    .compliance-mini-row { display: flex; align-items: center; gap: 0.5rem; }
+    .compliance-mini-bar { width: 120px; height: 16px; background: var(--border-light); border-radius: 8px; overflow: hidden; }
+    .compliance-mini-fill { height: 100%; border-radius: 8px; transition: width 0.3s ease; }
+    .compliance-mini-fill.red { background: linear-gradient(90deg, #f8a5a5, #fbc4c4); }
+    .compliance-mini-fill.orange { background: linear-gradient(90deg, #fbd5a5, #fde6c4); }
+    .compliance-mini-fill.green { background: linear-gradient(90deg, #4a8550, #6ba671); }
+    .compliance-mini-fill.gold { background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b); background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite; }
+    .compliance-mini-percent { font-size: 0.85rem; font-weight: 700; min-width: 40px; text-align: right; }
+    .compliance-mini-percent.red { color: #e57373; }
+    .compliance-mini-percent.orange { color: #ffb74d; }
+    .compliance-mini-percent.green { color: #4a8550; }
+    .compliance-mini-percent.gold { color: #b8860b; }
+
+    .card-modes { grid-column: span 2; }
+    .card-avgtime { grid-column: span 2; }
+    .card-batteries { grid-column: span 5; }
+    .card-audit-days { grid-column: span 3; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    .audit-days-count { font-size: 4rem; font-weight: 800; color: var(--accent-dark); line-height: 1; margin: 0.5rem 0; }
+    .audit-days-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+
+    .pilot-bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .pilot-bar .name { width: 100px; font-size: 0.8rem; font-weight: 500; }
+    .pilot-bar .bar-bg { flex: 1; height: 20px; background: var(--border-light); border-radius: 4px; overflow: hidden; }
+    .pilot-bar .bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; }
+    .pilot-bar .hours { font-size: 0.7rem; font-weight: 600; color: white; }
+
+    .mode-bars { display: flex; gap: 0.75rem; align-items: flex-end; height: 90px; }
+    .mode-bar { flex: 1; display: flex; flex-direction: column; align-items: center; }
+    .mode-bar .bar { width: 100%; border-radius: 4px 4px 0 0; }
+    .mode-bar .label { font-size: 0.7rem; font-weight: 600; margin-top: 0.25rem; color: var(--text-muted); }
+    .mode-bar .count { font-size: 0.75rem; font-weight: 600; margin-top: 0.15rem; }
+
+    .battery-bars { display: flex; gap: 0.5rem; align-items: flex-end; height: 70px; }
+    .battery-bar { flex: 1; display: flex; flex-direction: column; align-items: center; }
+    .battery-bar .bar { width: 100%; border-radius: 3px 3px 0 0; min-height: 4px; }
+    .battery-bar .label { font-size: 0.6rem; font-weight: 600; margin-top: 0.25rem; color: var(--text-muted); writing-mode: vertical-rl; text-orientation: mixed; height: 50px; }
+
+    .fts-highlight { border-left: 4px solid #dc2626 !important; background: #fef2f2 !important; }
+    .fts-badge { background: #fee2e2; color: #991b1b; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; margin-left: 0.5rem; }
+
+    #flightMap { height: 100%; min-height: 280px; width: 100%; border-radius: 16px; }
+
+    .pilot-item, .drone-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .pilot-item:last-child, .drone-item:last-child { border-bottom: none; }
+    .pilot-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: white;
+    }
+    .drone-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: var(--accent-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+    }
+    .pilot-info, .drone-info { flex: 1; }
+    .pilot-info .name, .drone-info .name { font-weight: 500; color: var(--text-primary); font-size: 0.9rem; }
+    .pilot-info .role, .drone-info .model { font-size: 0.75rem; color: var(--text-muted); }
+    .pilot-flights { font-size: 0.8rem; color: var(--accent); font-weight: 500; }
+
+    .geozone-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+    .geozone-bar .name { width: 120px; font-size: 0.85rem; color: var(--text-primary); }
+    .geozone-bar .bar-container { flex: 1; height: 8px; background: var(--border-light); border-radius: 4px; }
+    .geozone-bar .bar { height: 100%; background: var(--accent); border-radius: 4px; }
+    .geozone-bar .count { width: 30px; text-align: right; font-size: 0.8rem; color: var(--text-muted); }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      font-size: 0.9rem;
+      border-radius: 6px;
+      font-family: inherit;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .tab-btn.active { background: var(--accent-light); color: var(--accent-dark); }
+    .tab-btn:hover { color: var(--text-primary); }
+
+    /* Tab Headers with Add Button */
+    .tab-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .tab-header h3 { margin: 0; font-size: 1.1rem; color: var(--text-primary); }
+    .add-btn { background: var(--accent); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500; }
+    .add-btn:hover { background: var(--accent-dark); }
+
+    /* Data Tables */
+    .data-table-container { overflow-x: auto; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .data-table th { background: var(--bg-alt); padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-muted); text-transform: uppercase; font-size: 0.75rem; border-bottom: 2px solid var(--border); }
+    .data-table td { padding: 0.75rem; border-bottom: 1px solid var(--border-light); }
+    .data-table tr:hover { background: var(--bg-alt); }
+    .data-table .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; }
+    .badge-yes { background: #dcfce7; color: #166534; }
+    .badge-no { background: #fef3c7; color: #92400e; }
+    .badge-minor { background: #fef3c7; color: #92400e; }
+    .badge-serious { background: #fee2e2; color: #991b1b; }
+    .loading-cell { text-align: center; color: var(--text-muted); padding: 2rem !important; }
+
+    /* No Incidents Message */
+    .no-incidents { text-align: center; padding: 3rem; background: #f0fdf4; border-radius: 12px; border: 1px solid #bbf7d0; }
+    .no-incidents-icon { font-size: 3rem; margin-bottom: 1rem; }
+    .no-incidents h4 { margin: 0 0 0.5rem 0; color: #166534; }
+    .no-incidents p { margin: 0; color: #15803d; }
+
+    /* Modal Forms */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: white; border-radius: 12px; padding: 1.5rem; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto; }
+    .modal h3 { margin: 0 0 1rem 0; }
+    .modal-close { float: right; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-muted); }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; margin-bottom: 0.25rem; font-weight: 500; font-size: 0.85rem; color: var(--text-muted); }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; font-family: inherit; }
+    .form-group textarea { min-height: 80px; resize: vertical; }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--accent); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .form-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.5rem; }
+    .btn-cancel { background: var(--bg-alt); color: var(--text-primary); border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; }
+    .btn-submit { background: var(--accent); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 500; }
+    .btn-submit:hover { background: var(--accent-dark); }
+
+    /* Flight Plans List */
+    .flight-plans-grid { display: grid; gap: 0.75rem; }
+    .flight-plan-card {
+      background: var(--bg-card);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      transition: all 0.2s;
+    }
+    .flight-plan-card:hover { background: var(--accent-light); transform: translateX(4px); border-color: var(--accent); }
+    .flight-plan-card h3 { color: var(--text-primary); font-size: 1rem; margin-bottom: 0.35rem; font-weight: 600; }
+    .flight-plan-meta { display: flex; gap: 1.5rem; font-size: 0.8rem; color: var(--text-muted); flex-wrap: wrap; }
+    .status-badge {
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .status-completed { background: #dcfce7; color: #166534; }
+    .status-planned { background: #fef3c7; color: #92400e; }
+    .status-in-progress { background: #dbeafe; color: #1e40af; }
+
+    /* Detail View */
+    .detail-view { display: none; }
+    .detail-view.active { display: block; }
+    .back-btn {
+      color: var(--accent);
+      cursor: pointer;
+      font-size: 0.875rem;
+      margin-bottom: 1rem;
+      display: inline-block;
+      font-weight: 500;
+    }
+    .back-btn:hover { text-decoration: underline; }
+
+    .detail-header {
+      background: var(--bg-card);
+      padding: 1.5rem;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      margin-bottom: 1rem;
+    }
+    .detail-header h2 { color: var(--text-primary); margin-bottom: 1rem; font-weight: 700; }
+    .detail-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
+    .detail-info-item label { display: block; font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.25rem; font-weight: 600; letter-spacing: 0.5px; }
+    .detail-info-item span { color: var(--text-primary); font-weight: 500; }
+
+    .flight-logs-section {
+      background: var(--bg-card);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .flight-logs-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); }
+    .flight-logs-header h3 { color: var(--text-primary); font-weight: 600; }
+    .flight-logs-table { width: 100%; border-collapse: collapse; }
+    .flight-logs-table th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      background: var(--bg-secondary);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .flight-logs-table td { padding: 0.75rem 1rem; border-top: 1px solid var(--border-light); font-size: 0.85rem; }
+    .flight-logs-table tr:hover { background: var(--accent-light); }
+    .no-data { text-align: center; padding: 2rem; color: var(--text-muted); }
+
+    .loading { display: flex; align-items: center; justify-content: center; padding: 2rem; color: var(--text-muted); }
+    .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-right: 0.5rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Data Grid for new sections */
+    .data-grid { display: grid; gap: 0.75rem; }
+    .data-card {
+      background: var(--bg-card);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+    .data-card:hover { background: var(--accent-light); transform: translateX(4px); border-color: var(--accent); }
+    .data-card h3 { color: var(--text-primary); font-size: 1rem; margin-bottom: 0.35rem; font-weight: 600; }
+    .data-card-meta { display: flex; gap: 1.5rem; font-size: 0.8rem; color: var(--text-muted); flex-wrap: wrap; margin-top: 0.5rem; }
+    .data-card-meta span { display: flex; align-items: center; gap: 0.25rem; }
+
+    /* Badge styles */
+    .badge {
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-yellow { background: #fef3c7; color: #92400e; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .badge-gray { background: #f3f4f6; color: #374151; }
+
+    /* Drone card styling */
+    .drone-card { border-left: 4px solid var(--accent); }
+    .drone-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 1rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-light); }
+    .drone-stat { text-align: center; }
+    .drone-stat .value { font-size: 1.25rem; font-weight: 700; color: var(--text-primary); }
+    .drone-stat .label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; }
+
+    /* Health indicator */
+    .health-bar { width: 60px; height: 6px; background: var(--border-light); border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 0.5rem; }
+    .health-bar-fill { height: 100%; border-radius: 3px; }
+    .health-good { background: #22c55e; }
+    .health-warning { background: #f59e0b; }
+    .health-critical { background: #ef4444; }
+
+    /* Meeting card */
+    .meeting-card { border-left: 4px solid #3b82f6; }
+    .meeting-attendees { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+    .attendee-chip { background: var(--bg-secondary); padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem; color: var(--text-secondary); }
+    .meeting-actions { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-light); }
+    .action-item { font-size: 0.8rem; color: var(--text-secondary); padding: 0.25rem 0; }
+    .action-item::before { content: "• "; color: var(--accent); }
+
+    /* Tab scrolling for mobile */
+    .tabs { overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .tabs::-webkit-scrollbar { display: none; }
+
+    /* Evidence Sections */
+    .evidence-section {
+      background: var(--bg-card);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      margin-top: 1rem;
+      overflow: hidden;
+    }
+    .evidence-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .evidence-header h3 { color: var(--text-primary); font-weight: 600; margin: 0; }
+    .evidence-categories { padding: 1rem; }
+    .evidence-category {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .evidence-category:last-child { margin-bottom: 0; }
+    .evidence-category-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    .evidence-category-title {
+      font-weight: 600;
+      color: var(--text-primary);
+      font-size: 0.9rem;
+    }
+    .evidence-category-subtitle {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.15rem;
+    }
+    .upload-btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .upload-btn:hover { background: var(--accent-dark); }
+    .evidence-files {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 0.75rem;
+    }
+    .evidence-file {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+    }
+    .evidence-preview {
+      width: 100%;
+      height: 100px;
+      object-fit: cover;
+      display: block;
+      cursor: pointer;
+    }
+    .evidence-preview-pdf {
+      width: 100%;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fef2f2;
+      color: #dc2626;
+      font-size: 2rem;
+      cursor: pointer;
+    }
+    .evidence-file-info {
+      padding: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      border-top: 1px solid var(--border-light);
+    }
+    .evidence-file-name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 500;
+    }
+    .evidence-file-date { color: var(--text-muted); font-size: 0.7rem; }
+    .evidence-delete {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: rgba(220, 38, 38, 0.9);
+      color: white;
+      border: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 0.7rem;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .evidence-file:hover .evidence-delete { display: flex; }
+    .evidence-empty {
+      text-align: center;
+      padding: 1rem;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    .upload-input { display: none; }
+
+    /* Evidence Section Groups */
+    .evidence-section-group {
+      margin-bottom: 1.5rem;
+    }
+    .evidence-section-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      padding: 0.75rem 0;
+      margin-bottom: 0.5rem;
+      border-bottom: 2px solid var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Form Cards */
+    .evidence-form-card {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .evidence-form-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    .evidence-form-data {
+      font-size: 0.9rem;
+    }
+    .evidence-form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 0.5rem;
+    }
+    .form-data-row {
+      padding: 0.25rem 0;
+      color: var(--text-secondary);
+    }
+    .form-data-row strong {
+      color: var(--text-primary);
+    }
+
+    /* Map Card */
+    .evidence-map-card {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .evidence-map-container {
+      margin-top: 0.75rem;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      min-height: 200px;
+    }
+    .evidence-map-image {
+      width: 100%;
+      max-height: 400px;
+      object-fit: contain;
+      display: block;
+      cursor: pointer;
+    }
+
+    /* Zone Tags */
+    .zones-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .zone-tag {
+      background: var(--accent-light);
+      color: var(--accent-dark);
+      padding: 0.35rem 0.75rem;
+      border-radius: 16px;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    /* Evidence Bento Grid */
+    .evidence-bento {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .evidence-bento-item {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+    .evidence-bento-item.full-width {
+      grid-column: span 2;
+    }
+    .evidence-bento-item .evidence-form-header {
+      margin-bottom: 0.75rem;
+    }
+    /* Map card - image fills space */
+    .evidence-bento-item .evidence-map-container {
+      margin-top: 0.5rem;
+      height: 250px;
+      overflow: hidden;
+    }
+    .evidence-bento-item .evidence-map-image {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    /* Evidence Documents - 4 columns */
+    .evidence-bento-docs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+    }
+    @media (max-width: 1200px) {
+      .evidence-bento-docs {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+    @media (max-width: 900px) {
+      .evidence-bento-docs {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 768px) {
+      .evidence-bento {
+        grid-template-columns: 1fr;
+      }
+      .evidence-bento-item.full-width {
+        grid-column: span 1;
+      }
+      .evidence-bento-docs {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Image Modal */
+    .image-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+    .image-modal.active { display: flex; }
+    .image-modal img {
+      max-width: 90%;
+      max-height: 90%;
+      border-radius: 8px;
+    }
+    .image-modal-close {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: white;
+      color: #333;
+      border: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1.25rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 1200px) {
+      .bento-grid { grid-template-columns: repeat(6, 1fr); }
+      .card-flights, .card-plans, .card-time, .card-speed, .card-altitude, .card-avgtime { grid-column: span 2; }
+      .card-pilots, .card-drones { grid-column: span 3; }
+      .card-map, .card-geozones { grid-column: span 6; }
+    }
+    @media (max-width: 768px) {
+      .bento-grid { grid-template-columns: repeat(2, 1fr); }
+      .bento-card { grid-column: span 1 !important; grid-row: span 1 !important; }
+      .card-map, .card-geozones { grid-column: span 2 !important; }
+      .search-box input { width: 120px; }
+      .main-content { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Login Screen -->
+  <div class="login-container" id="loginScreen">
+    <div class="login-box">
+      <img src="/logo.png" alt="Aerial" style="height: 40px; margin-bottom: 0.5rem;">
+      <p>Enter your password to access flight data</p>
+      <div class="login-error" id="loginError">Invalid password. Please try again.</div>
+      <form id="loginForm">
+        <input type="password" id="password" placeholder="Enter password" autocomplete="current-password" required>
+        <button type="submit">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div class="dashboard" id="dashboard">
+    <div class="demo-banner" id="demoBanner" style="display:none;">Demo Mode - Showing sample data while Dronedeck API is unavailable</div>
+    <header class="header">
+      <img src="/logo.png" alt="Aerial" class="header-logo">
+      <div class="header-actions">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="Search flights...">
+        </div>
+        <button class="logout-btn" id="logoutBtn">Sign Out</button>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <!-- Home View -->
+      <div class="home-view" id="homeView">
+        <div class="bento-grid" id="bentoGrid"></div>
+
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="plans">Flight Plans</button>
+          <button class="tab-btn" data-tab="logs">Flight Logs</button>
+          <button class="tab-btn" data-tab="drones">Drones</button>
+          <button class="tab-btn" data-tab="batteries">Batteries</button>
+          <button class="tab-btn" data-tab="maintenance">Maintenance</button>
+          <button class="tab-btn" data-tab="training">Training</button>
+          <button class="tab-btn" data-tab="incidents">Incidents</button>
+        </div>
+
+        <div id="flightPlansTab">
+          <div class="tab-header">
+            <h3>Flight Plans</h3>
+            <button class="add-btn" onclick="showNewFlightPlanForm()">+ New Flight Plan</button>
+          </div>
+          <div class="flight-plans-grid" id="flightPlansGrid">
+            <div class="loading"><div class="spinner"></div>Loading...</div>
+          </div>
+        </div>
+
+        <div id="flightLogsTab" style="display:none;">
+          <div class="tab-header">
+            <h3>Flight Logs</h3>
+            <button class="add-btn" onclick="showImportLogsForm()">+ Import AirData</button>
+          </div>
+          <div class="flight-plans-grid" id="allFlightLogsGrid">
+            <div class="loading"><div class="spinner"></div>Loading...</div>
+          </div>
+        </div>
+
+        <div id="dronesTab" style="display:none;">
+          <div class="data-grid" id="dronesGrid">
+            <div class="loading"><div class="spinner"></div>Loading...</div>
+          </div>
+        </div>
+
+        <div id="batteriesTab" style="display:none;">
+          <div class="data-grid" id="batteriesGrid">
+            <div class="loading"><div class="spinner"></div>Loading...</div>
+          </div>
+        </div>
+
+        <!-- Maintenance Tab -->
+        <div id="maintenanceTab" style="display:none;">
+          <div class="tab-header">
+            <h3>Maintenance Logs</h3>
+            <button class="add-btn" onclick="showMaintenanceForm()">+ Add Maintenance</button>
+          </div>
+          <div class="data-table-container">
+            <table class="data-table" id="maintenanceTable">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Scheduled</th>
+                  <th>Performed By</th>
+                  <th>Drone</th>
+                  <th>Next Due</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="maintenanceTableBody">
+                <tr><td colspan="7" class="loading-cell">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Training Tab -->
+        <div id="trainingTab" style="display:none;">
+          <div class="tab-header">
+            <h3>Training Logs</h3>
+            <button class="add-btn" onclick="showTrainingForm()">+ Add Training</button>
+          </div>
+          <div class="data-table-container">
+            <table class="data-table" id="trainingTable">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Scheduled</th>
+                  <th>Pilot</th>
+                  <th>Next Due</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="trainingTableBody">
+                <tr><td colspan="6" class="loading-cell">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Incidents Tab -->
+        <div id="incidentsTab" style="display:none;">
+          <div class="tab-header">
+            <h3>Incident / Accident Reports</h3>
+            <button class="add-btn" onclick="showIncidentForm()">+ Report Incident</button>
+          </div>
+          <div id="incidentsContent">
+            <div class="no-incidents" id="noIncidentsMsg">
+              <div class="no-incidents-icon">✓</div>
+              <h4>No Incidents Recorded</h4>
+              <p>Great news! There are no incidents or accidents on record.</p>
+            </div>
+            <div class="data-table-container" id="incidentsTableContainer" style="display:none;">
+              <table class="data-table" id="incidentsTable">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Location</th>
+                    <th>Severity</th>
+                    <th>Pilot</th>
+                    <th>Injuries</th>
+                    <th>Reported to IAA</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="incidentsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detail View -->
+      <div class="detail-view" id="detailView">
+        <a class="back-btn" id="backBtn">← Back</a>
+        <div class="detail-header" id="detailHeader"></div>
+        <div class="flight-logs-section">
+          <div class="flight-logs-header"><h3>Flight Logs</h3></div>
+          <div id="flightLogsContainer"></div>
+        </div>
+        <!-- Evidence Section -->
+        <div class="evidence-section" id="evidenceSection">
+          <div class="evidence-header">
+            <h3>📁 Evidence Documents</h3>
+          </div>
+          <div class="evidence-categories" id="evidenceCategories">
+            <!-- Evidence categories will be rendered here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Image Preview Modal -->
+      <div class="image-modal" id="imageModal">
+        <button class="image-modal-close" onclick="closeImageModal()">×</button>
+        <img id="imageModalImg" src="" alt="Preview">
+      </div>
+
+      <!-- Planning Form Modal -->
+      <div class="modal-overlay" id="planningModal">
+        <div class="modal">
+          <button class="modal-close" onclick="closeModal('planningModal')">&times;</button>
+          <h3>Planning - Crew Assignment</h3>
+          <form id="planningForm" onsubmit="submitPlanningForm(event)">
+            <div class="form-group">
+              <label>Pilot in Command</label>
+              <select id="planningPIC">
+                <option value="">Select pilot...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Assistant</label>
+              <select id="planningAssistant">
+                <option value="">None</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>FTS Operator</label>
+              <select id="planningFTSOperator">
+                <option value="">Select operator...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>FTS Model</label>
+              <input type="text" id="planningFTSModel" value="Zephyr CC MVC3" readonly style="background:#f0f0f0;">
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn-cancel" onclick="closeModal('planningModal')">Cancel</button>
+              <button type="submit" class="btn-submit">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Flight Geography Form Modal -->
+      <div class="modal-overlay" id="flightGeographyModal">
+        <div class="modal" style="max-width:600px;">
+          <button class="modal-close" onclick="closeModal('flightGeographyModal')">&times;</button>
+          <h3>Flight Geography Parameters</h3>
+          <form id="flightGeographyForm" onsubmit="submitFlightGeographyForm(event)">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Latitude</label>
+                <input type="text" id="geoLatitude" placeholder="e.g. 53.3498">
+              </div>
+              <div class="form-group">
+                <label>Longitude</label>
+                <input type="text" id="geoLongitude" placeholder="e.g. -6.2603">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Operational Scenario</label>
+              <input type="text" id="geoScenario" placeholder="e.g. VLOS over populated area">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Flight Objective</label>
+                <input type="text" id="geoObjective" value="Photo & Video" readonly style="background:#f0f0f0;">
+              </div>
+              <div class="form-group">
+                <label>Flight Condition</label>
+                <input type="text" id="geoCondition" value="Specific category" readonly style="background:#f0f0f0;">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Max Height (m)</label>
+                <input type="number" id="geoMaxHeight" placeholder="e.g. 120">
+              </div>
+              <div class="form-group">
+                <label>Ground Risk Buffer (m)</label>
+                <input type="number" id="geoGroundRisk" placeholder="e.g. 10">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Max Flight Speed (m/s)</label>
+                <input type="number" id="geoMaxSpeed" placeholder="e.g. 19">
+              </div>
+              <div class="form-group">
+                <label>Contingency Volume</label>
+                <input type="text" id="geoContingency" placeholder="e.g. 20m horizontal">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Adjacent Area</label>
+              <input type="text" id="geoAdjacent" placeholder="e.g. Controlled ground area">
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn-cancel" onclick="closeModal('flightGeographyModal')">Cancel</button>
+              <button type="submit" class="btn-submit">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Airspace Zones Form Modal -->
+      <div class="modal-overlay" id="airspaceZonesModal">
+        <div class="modal">
+          <button class="modal-close" onclick="closeModal('airspaceZonesModal')">&times;</button>
+          <h3>Airspace Zones</h3>
+          <form id="airspaceZonesForm" onsubmit="submitAirspaceZonesForm(event)">
+            <div class="form-group">
+              <label>Enter each zone on a new line</label>
+              <textarea id="airspaceZonesText" rows="8" placeholder="e.g.&#10;ATZ Dublin Airport&#10;CTR Class C&#10;NOTAM Active Area"></textarea>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn-cancel" onclick="closeModal('airspaceZonesModal')">Cancel</button>
+              <button type="submit" class="btn-submit">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Maintenance Form Modal -->
+  <div class="modal-overlay" id="maintenanceModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal('maintenanceModal')">&times;</button>
+      <h3>Add Maintenance Record</h3>
+      <form id="maintenanceForm" onsubmit="submitMaintenanceForm(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Date</label>
+            <input type="date" name="date" required>
+          </div>
+          <div class="form-group">
+            <label>Maintenance Type</label>
+            <select name="type" required>
+              <option value="">Select type...</option>
+              <option value="Deep Maintenance">Deep Maintenance (600hrs/18mo)</option>
+              <option value="Routine Maintenance">Routine Maintenance (400hrs/12mo)</option>
+              <option value="Basic Maintenance">Basic Maintenance (200hrs/6mo)</option>
+              <option value="Battery Maintenance">Battery Maintenance (50 cycles/3mo)</option>
+              <option value="Software Update">Software Update</option>
+              <option value="Repair">Repair</option>
+              <option value="Inspection">Inspection</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Scheduled?</label>
+            <select name="scheduled">
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Performed By</label>
+            <input type="text" name="performed_by" placeholder="e.g. Droneworks, ROC" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Drone</label>
+            <select name="drone_id" id="maintenanceDroneSelect">
+              <option value="1">DJI Mavic 3 Pro</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Next Scheduled Date</label>
+            <input type="date" name="next_scheduled">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea name="notes" placeholder="Additional details..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-cancel" onclick="closeModal('maintenanceModal')">Cancel</button>
+          <button type="submit" class="btn-submit">Save Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Training Form Modal -->
+  <div class="modal-overlay" id="trainingModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal('trainingModal')">&times;</button>
+      <h3>Add Training Record</h3>
+      <form id="trainingForm" onsubmit="submitTrainingForm(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Date</label>
+            <input type="date" name="date" required>
+          </div>
+          <div class="form-group">
+            <label>Training Type</label>
+            <select name="type" required>
+              <option value="">Select type...</option>
+              <option value="A1/A3, A2, STS Training">A1/A3, A2, STS Training</option>
+              <option value="Specific Category Training">Specific Category Training</option>
+              <option value="ERP Training">ERP Training</option>
+              <option value="Operational Authorisation">Operational Authorisation</option>
+              <option value="Refresher Training">Refresher Training</option>
+              <option value="New Equipment Training">New Equipment Training</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Scheduled?</label>
+            <select name="scheduled">
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Pilot</label>
+            <select name="pilot_id" id="trainingPilotSelect" required>
+              <option value="">Select pilot...</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Next Scheduled Date</label>
+          <input type="date" name="next_scheduled">
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea name="notes" placeholder="Additional details..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-cancel" onclick="closeModal('trainingModal')">Cancel</button>
+          <button type="submit" class="btn-submit">Save Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Incident Form Modal -->
+  <div class="modal-overlay" id="incidentModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal('incidentModal')">&times;</button>
+      <h3>Report Incident / Accident</h3>
+      <form id="incidentForm" onsubmit="submitIncidentForm(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Date</label>
+            <input type="date" name="date" required>
+          </div>
+          <div class="form-group">
+            <label>Time</label>
+            <input type="time" name="time" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Location</label>
+          <input type="text" name="location" placeholder="Address or coordinates" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Severity</label>
+            <select name="severity" required>
+              <option value="Minor">Minor Incident</option>
+              <option value="Serious">Serious Incident</option>
+              <option value="Accident">Accident</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Pilot</label>
+            <select name="pilot_id" id="incidentPilotSelect" required>
+              <option value="">Select pilot...</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea name="description" placeholder="Describe what happened..." required></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Any Injuries?</label>
+            <select name="injuries">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Property Damage?</label>
+            <select name="property_damage">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Reported to IAA?</label>
+            <select name="reported_to_iaa">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>IAA Reference (if reported)</label>
+            <input type="text" name="iaa_reference" placeholder="Reference number">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Actions Taken</label>
+          <textarea name="actions_taken" placeholder="What corrective actions were taken?"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Lessons Learned</label>
+          <textarea name="lessons_learned" placeholder="What was learned from this incident?"></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-cancel" onclick="closeModal('incidentModal')">Cancel</button>
+          <button type="submit" class="btn-submit">Submit Report</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- New Flight Plan Modal -->
+  <div class="modal-overlay" id="newFlightPlanModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal('newFlightPlanModal')">&times;</button>
+      <h3>Create New Flight Plan</h3>
+      <form id="newFlightPlanForm" onsubmit="createFlightPlan(event)">
+        <div class="form-group">
+          <label>Flight Plan Name *</label>
+          <input type="text" name="name" placeholder="e.g., Site Survey - Dublin Port" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Date *</label>
+            <input type="date" name="date" required>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select name="status">
+              <option value="Planned">Planned</option>
+              <option value="Completed">Completed</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Location *</label>
+          <input type="text" name="location" placeholder="Address or area description" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Geozone</label>
+            <select name="geozone">
+              <option value="">None</option>
+              <option value="DUB-SORA">DUB-SORA</option>
+              <option value="Controlled">Controlled Airspace</option>
+              <option value="Restricted">Restricted Area</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Max Altitude (m)</label>
+            <input type="number" name="max_altitude" value="120" min="0" max="400">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-cancel" onclick="closeModal('newFlightPlanModal')">Cancel</button>
+          <button type="submit" class="btn-submit">Create Flight Plan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Import AirData Modal -->
+  <div class="modal-overlay" id="importLogsModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal('importLogsModal')">&times;</button>
+      <h3>Import Flight Logs from AirData</h3>
+      <form id="importLogsForm" onsubmit="importAirDataLogs(event)">
+        <div class="form-group">
+          <label>Flight Plan *</label>
+          <select name="flight_plan_id" id="importLogsPlanSelect" required>
+            <option value="">Select flight plan...</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Pilot in Command *</label>
+            <select name="pic" id="importLogsPicSelect" required>
+              <option value="">Select pilot...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Assistant</label>
+            <select name="assistant" id="importLogsAssistantSelect">
+              <option value="">None</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Drone</label>
+            <select name="drone" id="importLogsDroneSelect">
+              <option value="">Select drone...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Battery Used</label>
+            <select name="battery" id="importLogsBatterySelect">
+              <option value="">Select battery...</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>AirData CSV File *</label>
+          <input type="file" name="file" accept=".csv" required>
+          <small style="color: var(--text-muted);">Export the flight from AirData as CSV</small>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-cancel" onclick="closeModal('importLogsModal')">Cancel</button>
+          <button type="submit" class="btn-submit">Import Flight Log</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let stats = {}, flightPlans = [], flightLogs = [], drones = [], batteryLogs = [], map = null, markers = [];
+
+    const loginScreen = document.getElementById('loginScreen');
+    const dashboard = document.getElementById('dashboard');
+    const loginForm = document.getElementById('loginForm');
+    const loginError = document.getElementById('loginError');
+    const demoBanner = document.getElementById('demoBanner');
+    const homeView = document.getElementById('homeView');
+    const detailView = document.getElementById('detailView');
+    const searchInput = document.getElementById('searchInput');
+
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/auth/status');
+        const data = await res.json();
+        if (data.authenticated) { showDashboard(); loadAllData(); }
+      } catch (e) {}
+    }
+
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: document.getElementById('password').value })
+        });
+        if (res.ok) { loginError.style.display = 'none'; showDashboard(); loadAllData(); }
+        else { loginError.style.display = 'block'; }
+      } catch (e) { loginError.textContent = 'Connection error'; loginError.style.display = 'block'; }
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await fetch('/api/logout', { method: 'POST' });
+      dashboard.classList.remove('active');
+      loginScreen.style.display = 'flex';
+    });
+
+    function showDashboard() { loginScreen.style.display = 'none'; dashboard.classList.add('active'); }
+
+    async function safeFetch(url) {
+      try {
+        // Add cache-busting parameter to force fresh data
+        const cacheBuster = '_v=' + Date.now();
+        const fullUrl = url + (url.includes('?') ? '&' : '?') + cacheBuster;
+        const r = await fetch(fullUrl, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        const text = await r.text();
+        if (text.startsWith('{') || text.startsWith('[')) {
+          return JSON.parse(text);
+        }
+        console.error('API returned non-JSON for', url);
+        return { data: [] };
+      } catch (e) {
+        console.error('Fetch error for', url, e);
+        return { data: [] };
+      }
+    }
+
+    let maintenanceLogs = [], trainingLogs = [], incidentReports = [], pilots = [];
+
+    async function loadAllData() {
+      const [statsRes, plansRes, logsRes, dronesRes, pilotsRes, batteriesRes, maintenanceRes, trainingRes, incidentsRes] = await Promise.all([
+        safeFetch('/api/dashboard/stats'),
+        safeFetch('/api/flight-plans'),
+        safeFetch('/api/flight-logs'),
+        safeFetch('/api/drones'),
+        safeFetch('/api/pilots'),
+        safeFetch('/api/batteries'),
+        safeFetch('/api/maintenance-logs'),
+        safeFetch('/api/training-logs'),
+        safeFetch('/api/incident-reports')
+      ]);
+
+      // New Supabase API returns arrays directly, not { data: [...] }
+      stats = statsRes || {};
+      flightPlans = Array.isArray(plansRes) ? plansRes : (plansRes.data || []);
+      flightLogs = Array.isArray(logsRes) ? logsRes : (logsRes.data || []);
+      drones = Array.isArray(dronesRes) ? dronesRes : (dronesRes.data || []);
+      pilots = Array.isArray(pilotsRes) ? pilotsRes : (pilotsRes.data || []);
+      batteryLogs = Array.isArray(batteriesRes) ? batteriesRes : (batteriesRes.data || []);
+      maintenanceLogs = Array.isArray(maintenanceRes) ? maintenanceRes : (maintenanceRes.data || []);
+      trainingLogs = Array.isArray(trainingRes) ? trainingRes : (trainingRes.data || []);
+      incidentReports = Array.isArray(incidentsRes) ? incidentsRes : (incidentsRes.data || []);
+
+      // Calculate pilot hours
+      const pilotHours = {};
+      pilots.forEach(p => { pilotHours[p.code] = 0; });
+      flightLogs.forEach(l => {
+        if (pilotHours[l.pic] !== undefined) {
+          pilotHours[l.pic] += (parseFloat(l.air_time_minutes) || 0) / 60;
+        }
+      });
+
+      // Calculate FTS activations
+      const ftsActivations = flightLogs.filter(l => l.fts_activation === 1).length;
+
+      // Calculate flight modes
+      const flightModes = { N: 0, C: 0, S: 0 };
+      flightLogs.forEach(l => {
+        if (flightModes[l.flight_mode] !== undefined) {
+          flightModes[l.flight_mode]++;
+        }
+      });
+
+      // Calculate battery usage with pastel colors (using serial codes)
+      const batteryColorMap = {
+        'A0C76F': { color: '#f9a8d4', name: 'Pink' },    // Pink 01 (pastel)
+        'A17B2M': { color: '#86efac', name: 'Green' },   // Green 02 (pastel)
+        'A17B99': { color: '#fdba74', name: 'Orange' },  // Orange 03 (pastel)
+        'A17CYM': { color: '#fca5a5', name: 'Red' },     // Red 04 (pastel)
+        'G20UQA': { color: '#fde047', name: 'Yellow' },  // Yellow 05 (pastel)
+        'G2131A': { color: '#93c5fd', name: 'Blue' },    // Blue 06 (pastel)
+        'G217BA': { color: '#d1d5db', name: 'White' }    // White 07 (pastel gray)
+      };
+      const batteryUsage = batteryLogs.map(b => {
+        const code = b.serial_number || '';
+        const colorInfo = batteryColorMap[code] || { color: '#6b7280', name: 'Unknown' };
+        return {
+          name: b.name,
+          code: code,
+          label: code,
+          cycles: b.cycles || 0,
+          totalHours: parseFloat(b.total_hours) || 0,
+          color: colorInfo.color,
+          colorName: colorInfo.name
+        };
+      }).sort((a, b) => {
+        // Sort by cycles descending (most used to least used)
+        return (b.cycles || 0) - (a.cycles || 0);
+      });
+
+      // Build stats object from Supabase data
+      stats = {
+        totalFlightLogs: stats.flight_logs || flightLogs.length,
+        totalFlightPlans: stats.flight_plans || flightPlans.length,
+        totalPilots: stats.pilots || pilots.length,
+        totalDrones: stats.drones || drones.length,
+        totalFlightTimeSeconds: (parseFloat(stats.total_flight_minutes) || 0) * 60,
+        avgFlightTimeSeconds: flightLogs.length > 0
+          ? Math.round((parseFloat(stats.total_flight_minutes) || 0) * 60 / flightLogs.length)
+          : 0,
+        ftsActivations: ftsActivations,
+        flightModes: flightModes,
+        batteryUsage: batteryUsage,
+        pilots: pilots.map(p => ({
+          name: p.name,
+          role: p.license || 'Pilot',
+          flights: p.flights || 0,
+          hours: pilotHours[p.code] || 0
+        })),
+        drones: drones.map(d => ({
+          name: d.name,
+          model: d.model || d.type || 'Drone'
+        })),
+        popularGeozones: getPopularLocations(flightPlans)
+      };
+
+      // Hide demo banner - we have real data now
+      demoBanner.style.display = 'none';
+
+      renderBentoGrid();
+      renderFlightPlans();
+      renderAllFlightLogs();
+      renderDrones();
+      renderBatteries();
+      renderMaintenanceLogs();
+      renderTrainingLogs();
+      renderIncidentReports();
+      populateFormDropdowns();
+      initMap();
+    }
+
+    function getPopularLocations(plans) {
+      const locationCounts = {};
+      plans.forEach(p => {
+        const loc = p.location || p.geozone || 'Unknown';
+        locationCounts[loc] = (locationCounts[loc] || 0) + 1;
+      });
+      return Object.entries(locationCounts)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+    }
+
+    function renderBentoGrid() {
+      const hours = Math.floor(stats.totalFlightTimeSeconds / 3600);
+      const mins = Math.floor((stats.totalFlightTimeSeconds % 3600) / 60);
+      const avgMins = Math.floor(stats.avgFlightTimeSeconds / 60);
+      const avgSecs = stats.avgFlightTimeSeconds % 60;
+
+      document.getElementById('bentoGrid').innerHTML = `
+        <div class="bento-card card-flights">
+          <h3>Total Flights</h3>
+          <div class="value">${stats.totalFlightLogs}</div>
+        </div>
+        <div class="bento-card card-plans">
+          <h3>Flight Plans</h3>
+          <div class="value">${stats.totalFlightPlans}</div>
+        </div>
+        <div class="bento-card card-time">
+          <h3>Flight Hours</h3>
+          <div class="value">${hours}<span class="unit">h</span> ${mins}<span class="unit">m</span></div>
+        </div>
+        <div class="bento-card card-pilots">
+          <h3>Pilots (${stats.totalPilots})</h3>
+          <div class="pilots-list">
+            ${(stats.pilots || []).map(p => `
+              <div class="pilot-item">
+                <div class="pilot-avatar">${p.name.split(' ').map(n=>n[0]).join('')}</div>
+                <div class="pilot-info">
+                  <div class="name">${esc(p.name)}</div>
+                  <div class="role">${esc(p.role)}</div>
+                </div>
+                <div class="pilot-flights">${p.flights} flights</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        <div class="bento-card card-drones">
+          <h3>Drones (${stats.totalDrones})</h3>
+          <div class="drones-list">
+            ${(stats.drones || []).map(d => `
+              <div class="drone-item">
+                <div class="drone-icon">🚁</div>
+                <div class="drone-info">
+                  <div class="name">${esc(d.name)}</div>
+                  <div class="model">${esc(d.model)}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        <div class="bento-card card-map">
+          <div id="flightMap"></div>
+        </div>
+        <div class="bento-card card-pilothours">
+          <h3>Pilot Flight Hours</h3>
+          <div class="pilot-hours-chart">
+            ${(stats.pilots || []).map(p => {
+              const maxHours = Math.max(...(stats.pilots || []).map(x => x.hours || 0), 1);
+              const pct = ((p.hours || 0) / maxHours) * 100;
+              const color = 'var(--accent)';
+              return `
+                <div class="pilot-bar">
+                  <span class="name">${esc(p.name.split(' ')[0])}</span>
+                  <div class="bar-bg">
+                    <div class="bar-fill" style="width:${pct}%;background:${color};">
+                      <span class="hours">${(p.hours || 0).toFixed(1)}h</span>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        <div class="bento-card card-audit" id="auditBusterCard">
+          <h3>Audit Buster</h3>
+          <div class="audit-progress-label">
+            <span class="title">Overall Compliance</span>
+            <span class="percent" id="auditPercent">--%</span>
+          </div>
+          <div class="audit-progress-bar">
+            <div class="audit-progress-fill" id="auditProgressFill" style="width:0%;"></div>
+          </div>
+        </div>
+        <div class="bento-card card-modes">
+          <h3>Flight Modes</h3>
+          <div class="mode-bars">
+            ${(() => {
+              // Order: Cine, Normal, Sports
+              const modes = ['C', 'N', 'S'];
+              const maxHeight = 75; // pixels for tallest bar
+              const maxMode = Math.max(...modes.map(m => stats.flightModes?.[m] || 0), 1);
+              // Shades of Aerial green
+              const colors = { C: '#4a8550', N: '#6ba671', S: '#8fc094' };
+              const labels = { C: 'Cine', N: 'Normal', S: 'Sports' };
+              return modes.map(mode => {
+                const count = stats.flightModes?.[mode] || 0;
+                // Use pixel heights for clear proportional difference
+                const heightPx = count > 0 ? Math.round((count / maxMode) * maxHeight) : 8;
+                return `
+                  <div class="mode-bar">
+                    <div class="bar" style="height:${heightPx}px;background:${colors[mode]};display:flex;align-items:center;justify-content:center;">
+                      <span style="color:white;font-size:0.75rem;font-weight:700;">${count}</span>
+                    </div>
+                    <span class="label">${labels[mode]}</span>
+                  </div>
+                `;
+              }).join('');
+            })()}
+          </div>
+        </div>
+        <div class="bento-card card-avgtime">
+          <h3>Avg Flight Time</h3>
+          <div class="value" style="font-size:2.5rem;">${avgMins}<span class="unit">m</span> ${avgSecs}<span class="unit">s</span></div>
+        </div>
+        <div class="bento-card card-batteries">
+          <h3>Battery Usage (cycles)</h3>
+          <div class="battery-bars">
+            ${(() => {
+              const batteries = stats.batteryUsage || [];
+              const maxCycles = Math.max(...batteries.map(x => x.cycles || 0), 1);
+              const maxHeight = 55; // pixels for tallest bar
+              return batteries.map(b => {
+                const cycles = b.cycles || 0;
+                // Use pixel heights for proportional bars
+                const heightPx = cycles > 0 ? Math.round((cycles / maxCycles) * maxHeight) : 8;
+                return `
+                  <div class="battery-bar">
+                    <div class="bar" style="height:${heightPx}px;background:${b.color};display:flex;align-items:center;justify-content:center;">
+                      <span style="color:#333;font-size:0.65rem;font-weight:700;">${cycles}</span>
+                    </div>
+                    <span class="label" style="color:#666;writing-mode:horizontal-tb;height:auto;font-size:0.5rem;margin-top:4px;">${b.code}</span>
+                  </div>
+                `;
+              }).join('');
+            })()}
+          </div>
+        </div>
+        <div class="bento-card card-audit-days">
+          <h3>Days Since Last Audit</h3>
+          <div class="audit-days-count">${(() => {
+            const lastAudit = new Date('2025-06-05');
+            const today = new Date();
+            const diffTime = Math.abs(today - lastAudit);
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays;
+          })()}</div>
+          <div class="audit-days-label">days</div>
+        </div>
+      `;
+
+      // Load evidence for all flight plans and update Audit Buster
+      loadAllEvidenceAndUpdateAudit();
+    }
+
+    // Store evidence for all flight plans
+    let allPlansEvidence = {};
+
+    // Load evidence for all flight plans and calculate compliance
+    async function loadAllEvidenceAndUpdateAudit() {
+      try {
+        // Load evidence for each flight plan
+        const evidencePromises = flightPlans.map(async (plan) => {
+          try {
+            const res = await safeFetch(`/api/flight-plans/${plan.id}/evidence`);
+            return { planId: plan.id, evidence: res };
+          } catch (err) {
+            return { planId: plan.id, evidence: null };
+          }
+        });
+
+        const results = await Promise.all(evidencePromises);
+        results.forEach(r => {
+          if (r.evidence) {
+            allPlansEvidence[r.planId] = r.evidence;
+          }
+        });
+
+        updateAuditBuster();
+        renderFlightPlans(); // Re-render flight plans with correct compliance data
+      } catch (err) {
+        console.error('Error loading evidence for audit:', err);
+      }
+    }
+
+    // Calculate compliance for a single flight plan
+    function calculatePlanCompliance(planId) {
+      const evidence = allPlansEvidence[planId] || {};
+      const planLogs = flightLogs.filter(l => l.flight_plan_id === planId);
+
+      // 11 compliance items
+      const items = {
+        flightLogs: planLogs.length >= 1,
+        crewAssignment: !!(evidence.planning?.pilotInCommand),
+        airspaceZones: (evidence.airspaceZones?.length || 0) > 0,
+        operationMap: (evidence.flightGeography?.length || 0) > 0,
+        flightParams: !!(evidence.flightGeographyData?.latitude && evidence.flightGeographyData?.maxHeight),
+        emergencyPlan: (evidence.emergencyResponsePlan?.length || 0) > 0,
+        weather: (evidence.weather?.length || 0) > 0,
+        nearbyEvents: (evidence.nearbyEvents?.length || 0) > 0,
+        notams: (evidence.notams?.length || 0) > 0,
+        uf101Permission: (evidence.uf101Permission?.length || 0) > 0,
+        uf101Application: (evidence.uf101Application?.length || 0) > 0
+      };
+
+      const completed = Object.values(items).filter(Boolean).length;
+      const total = 11;
+      const percentage = Math.round((completed / total) * 100);
+
+      // Find what's missing
+      const missing = [];
+      if (!items.flightLogs) missing.push('Flight Logs');
+      if (!items.crewAssignment) missing.push('Crew');
+      if (!items.airspaceZones) missing.push('Airspace');
+      if (!items.operationMap) missing.push('Op Map');
+      if (!items.flightParams) missing.push('Params');
+      if (!items.emergencyPlan) missing.push('ERP');
+      if (!items.weather) missing.push('Weather');
+      if (!items.nearbyEvents) missing.push('Events');
+      if (!items.notams) missing.push('NOTAMs');
+      if (!items.uf101Permission) missing.push('UF101 Perm');
+      if (!items.uf101Application) missing.push('UF101 App');
+
+      return { completed, total, percentage, missing, isFullyCompliant: completed === total };
+    }
+
+    // Generate mini compliance progress bar HTML
+    function getMiniComplianceBar(planId) {
+      const compliance = calculatePlanCompliance(planId);
+      const pct = compliance.percentage;
+      let colorClass = 'red';
+      if (pct === 100) colorClass = 'gold';
+      else if (pct >= 66) colorClass = 'green';
+      else if (pct >= 33) colorClass = 'orange';
+
+      return `
+        <div class="compliance-mini">
+          <span class="compliance-mini-label">Compliance Score</span>
+          <div class="compliance-mini-row">
+            <div class="compliance-mini-bar">
+              <div class="compliance-mini-fill ${colorClass}" style="width:${pct}%;"></div>
+            </div>
+            <span class="compliance-mini-percent ${colorClass}">${pct}%</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // Update the Audit Buster display
+    function updateAuditBuster() {
+      let totalCompleted = 0;
+      let totalItems = 0;
+
+      flightPlans.forEach(plan => {
+        const compliance = calculatePlanCompliance(plan.id);
+        totalCompleted += compliance.completed;
+        totalItems += compliance.total;
+      });
+
+      const overallPercent = totalItems > 0 ? Math.round((totalCompleted / totalItems) * 100) : 0;
+
+      // Update progress bar
+      const percentEl = document.getElementById('auditPercent');
+      const fillEl = document.getElementById('auditProgressFill');
+
+      percentEl.textContent = overallPercent + '%';
+      fillEl.style.width = overallPercent + '%';
+
+      // Set color class based on percentage
+      fillEl.classList.remove('red', 'orange', 'green', 'gold');
+      if (overallPercent === 100) {
+        fillEl.classList.add('gold');
+        percentEl.style.color = '#b8860b';
+      } else if (overallPercent >= 66) {
+        fillEl.classList.add('green');
+        percentEl.style.color = '#4a8550';
+      } else if (overallPercent >= 33) {
+        fillEl.classList.add('orange');
+        percentEl.style.color = '#ea580c';
+      } else {
+        fillEl.classList.add('red');
+        percentEl.style.color = '#dc2626';
+      }
+    }
+
+    function initMap() {
+      if (map) map.remove();
+      map = L.map('flightMap').setView([53.3, -8], 6);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '©OpenStreetMap, ©CartoDB'
+      }).addTo(map);
+
+      markers = [];
+      // Add markers from flight plans with coordinates
+      flightPlans.forEach(plan => {
+        if (plan.latitude && plan.longitude) {
+          const flightCount = plan.flight_count || flightLogs.filter(l => l.flight_plan_id === plan.id).length;
+          const marker = L.circleMarker([plan.latitude, plan.longitude], {
+            radius: 8 + Math.min(flightCount, 10),
+            fillColor: '#6ba671',
+            color: '#4a8550',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.7
+          }).addTo(map);
+          marker.bindPopup(`<b>${esc(plan.name)}</b><br>${esc(plan.location || plan.geozone || '')}<br>${flightCount} flight${flightCount !== 1 ? 's' : ''}`);
+          markers.push(marker);
+        }
+      });
+
+      // Also check flight logs for coordinates
+      flightLogs.forEach(log => {
+        if (log.latitude && log.longitude) {
+          const marker = L.circleMarker([log.latitude, log.longitude], {
+            radius: 6,
+            fillColor: '#6ba671',
+            color: '#4a8550',
+            weight: 1,
+            opacity: 0.8,
+            fillOpacity: 0.5
+          }).addTo(map);
+          marker.bindPopup(`<b>${esc(log.flight_plan_name || 'Flight')}</b><br>${(parseFloat(log.air_time_minutes) || 0).toFixed(1)}m`);
+          markers.push(marker);
+        }
+      });
+
+      if (markers.length > 0) {
+        const group = L.featureGroup(markers);
+        map.fitBounds(group.getBounds().pad(0.1));
+      }
+    }
+
+    function renderFlightPlans(filter = '') {
+      const filtered = flightPlans.filter(p =>
+        (p.name || '').toLowerCase().includes(filter.toLowerCase()) ||
+        (p.location || p.geozone || '').toLowerCase().includes(filter.toLowerCase())
+      );
+      document.getElementById('flightPlansGrid').innerHTML = filtered.length === 0
+        ? '<div class="no-data">No flight plans found</div>'
+        : filtered.map(plan => {
+          const logsCount = plan.flight_count || flightLogs.filter(l => l.flight_plan_id === plan.id).length;
+          const totalTime = plan.total_air_time || 0;
+          return `
+            <div class="flight-plan-card" data-id="${plan.id}">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <h3>${esc(plan.name)}</h3>
+                ${getMiniComplianceBar(plan.id)}
+              </div>
+              <div class="flight-plan-meta">
+                <span>📅 ${formatDate(plan.date)}</span>
+                <span>🛩️ ${logsCount} flight${logsCount !== 1 ? 's' : ''}</span>
+                <span>⏱️ ${Math.round(totalTime)}m</span>
+                <span>📍 ${esc(plan.location || plan.geozone || '')}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+      document.querySelectorAll('.flight-plan-card').forEach(card => {
+        card.addEventListener('click', () => showPlanDetail(parseInt(card.dataset.id)));
+      });
+    }
+
+    function renderAllFlightLogs(filter = '') {
+      const filtered = flightLogs.filter(l =>
+        (l.flight_plan_name || '').toLowerCase().includes(filter.toLowerCase()) ||
+        (l.takeoff_address || '').toLowerCase().includes(filter.toLowerCase()) ||
+        (l.pic || '').toLowerCase().includes(filter.toLowerCase()) ||
+        (l.drone || '').toLowerCase().includes(filter.toLowerCase())
+      );
+      document.getElementById('allFlightLogsGrid').innerHTML = filtered.length === 0
+        ? '<div class="no-data">No flight logs found</div>'
+        : filtered.map(log => {
+          const airTimeMin = parseFloat(log.air_time_minutes) || 0;
+          const mode = log.flight_mode === 'N' ? 'Normal' : log.flight_mode === 'C' ? 'Cine' : log.flight_mode === 'S' ? 'Sports' : log.flight_mode || '';
+          const isFTS = log.fts_activation === 1;
+          return `
+            <div class="flight-plan-card ${isFTS ? 'fts-highlight' : ''}">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <h3>${esc(log.flight_plan_name || 'Flight Log')}${isFTS ? '<span class="fts-badge">FTS</span>' : ''}</h3>
+                <span style="color:var(--accent);font-size:0.8rem;font-weight:500;">${airTimeMin.toFixed(1)}m</span>
+              </div>
+              <div class="flight-plan-meta">
+                <span>📅 ${formatDate(log.date_time_utc)}</span>
+                <span>🚁 ${esc(log.drone || '')}</span>
+                <span>👤 ${esc(log.pic || '')}</span>
+                ${mode ? `<span>🎮 ${mode}</span>` : ''}
+                ${log.max_altitude ? `<span>📏 ${log.max_altitude}m</span>` : ''}
+                ${log.max_speed ? `<span>⚡ ${log.max_speed}km/h</span>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+    }
+
+    function renderDrones() {
+      document.getElementById('dronesGrid').innerHTML = drones.length === 0
+        ? '<div class="no-data">No drones found</div>'
+        : drones.map(drone => `
+          <div class="data-card drone-card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+              <div>
+                <h3>🚁 ${esc(drone.name)}</h3>
+                <div style="font-size:0.85rem;color:var(--text-secondary);margin-top:0.25rem;">${esc(drone.type || drone.model || '')}</div>
+              </div>
+              <span class="badge badge-green">Active</span>
+            </div>
+            <div class="data-card-meta">
+              <span>🔢 ${esc(drone.serial_number || '')}</span>
+              <span>⚖️ ${drone.weight ? drone.weight + 'g' : '-'}</span>
+            </div>
+            <div class="drone-stats">
+              <div class="drone-stat"><div class="value">${drone.total_flights || 0}</div><div class="label">Flights</div></div>
+              <div class="drone-stat"><div class="value">${drone.total_hours || 0}h</div><div class="label">Flight Hours</div></div>
+            </div>
+          </div>
+        `).join('');
+    }
+
+
+    function renderBatteries() {
+      document.getElementById('batteriesGrid').innerHTML = batteryLogs.length === 0
+        ? '<div class="no-data">No batteries found</div>'
+        : batteryLogs.map(battery => {
+          const cycles = battery.cycles || 0;
+          const totalHours = battery.total_hours || 0;
+          return `
+            <div class="data-card" style="border-left: 4px solid #22c55e;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <h3>🔋 ${esc(battery.name)}</h3>
+                <span class="badge badge-green">Active</span>
+              </div>
+              <div class="data-card-meta">
+                <span>🔢 ${esc(battery.serial_number || '')}</span>
+                <span>🔄 ${cycles} cycles</span>
+                <span>⏱️ ${totalHours}h total</span>
+              </div>
+              <div class="data-card-meta" style="margin-top:0.5rem;">
+                <span>⚡ ${battery.capacity ? battery.capacity + 'mAh' : '-'}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+    }
+
+
+    function showPlanDetail(planId) {
+      const plan = flightPlans.find(p => p.id === planId);
+      const planLogs = flightLogs.filter(l => l.flight_plan_id === planId);
+      homeView.style.display = 'none';
+      detailView.classList.add('active');
+      currentPlanId = planId; // Set current plan for evidence
+      loadEvidence(planId); // Load evidence for this plan
+      updateDetailHeader(plan, planLogs);
+      document.getElementById('flightLogsContainer').innerHTML = planLogs.length === 0
+        ? '<div class="no-data">No flight logs</div>'
+        : `<table class="flight-logs-table">
+            <thead><tr><th>Date</th><th>Drone</th><th>Pilot</th><th>Duration</th><th>Mode</th><th>Battery</th><th>FTS</th></tr></thead>
+            <tbody>${planLogs.map(log => {
+              const mode = log.flight_mode === 'N' ? 'Normal' : log.flight_mode === 'C' ? 'Cine' : log.flight_mode === 'S' ? 'Sports' : log.flight_mode || '-';
+              const isFTS = log.fts_activation === 1;
+              return `
+              <tr style="${isFTS ? 'background:#fef2f2;' : ''}">
+                <td>${formatDate(log.date_time_utc)}</td>
+                <td>${esc(log.drone || '-')}</td>
+                <td>${esc(log.pic || '-')}</td>
+                <td>${(parseFloat(log.air_time_minutes) || 0).toFixed(1)}m</td>
+                <td>${mode}</td>
+                <td>${esc(log.battery || '-')}</td>
+                <td>${isFTS ? '<span style="color:#dc2626;font-weight:600;">✓</span>' : '-'}</td>
+              </tr>
+            `;}).join('')}</tbody>
+          </table>`;
+    }
+
+    // Helper function to update detail header with evidence data
+    function updateDetailHeader(plan, planLogs) {
+      if (!plan) plan = flightPlans.find(p => p.id === currentPlanId);
+      if (!planLogs) planLogs = flightLogs.filter(l => l.flight_plan_id === currentPlanId);
+
+      const totalMinutes = planLogs.reduce((s, l) => s + (parseFloat(l.air_time_minutes) || 0), 0);
+
+      // Get location from evidence flightGeographyData if available
+      const geo = currentEvidence?.flightGeographyData || {};
+      let locationDisplay = esc(plan?.location || plan?.geozone || '-');
+      if (geo.latitude && geo.longitude) {
+        locationDisplay = `${geo.latitude}, ${geo.longitude}`;
+      }
+
+      // Get max altitude from evidence flightGeographyData if available
+      let maxAltDisplay = plan?.max_altitude || '-';
+      if (geo.maxHeight) {
+        maxAltDisplay = geo.maxHeight;
+      }
+
+      document.getElementById('detailHeader').innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <h2>${esc(plan?.name || 'Flight Plan')}</h2>
+          ${getMiniComplianceBar(plan?.id || currentPlanId)}
+        </div>
+        <div class="detail-info">
+          <div class="detail-info-item"><label>Date</label><span>${formatDate(plan?.date)}</span></div>
+          <div class="detail-info-item"><label>Location</label><span>${locationDisplay}</span></div>
+          <div class="detail-info-item"><label>Max Altitude</label><span>${maxAltDisplay}m</span></div>
+          <div class="detail-info-item"><label>Flight Logs</label><span>${planLogs.length}</span></div>
+          <div class="detail-info-item"><label>Total Time</label><span>${totalMinutes.toFixed(1)}m</span></div>
+        </div>
+      `;
+    }
+
+    document.getElementById('backBtn').addEventListener('click', () => {
+      detailView.classList.remove('active');
+      homeView.style.display = 'block';
+    });
+
+    // ============ MAINTENANCE LOGS ============
+    function renderMaintenanceLogs() {
+      const tbody = document.getElementById('maintenanceTableBody');
+      if (!maintenanceLogs || maintenanceLogs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="loading-cell">No maintenance records yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = maintenanceLogs.map(log => {
+        const isOverdue = log.next_scheduled && new Date(log.next_scheduled) < new Date();
+        return `
+          <tr style="${isOverdue ? 'background:#fef2f2;' : ''}">
+            <td>${formatDate(log.date)}</td>
+            <td>${esc(log.type)}</td>
+            <td><span class="badge ${log.scheduled ? 'badge-yes' : 'badge-no'}">${log.scheduled ? 'Yes' : 'No'}</span></td>
+            <td>${esc(log.performed_by)}</td>
+            <td>${esc(log.drone_name || 'DJI Mavic 3 Pro')}</td>
+            <td style="${isOverdue ? 'color:#dc2626;font-weight:600;' : ''}">${log.next_scheduled ? formatDate(log.next_scheduled) : '-'}</td>
+            <td>${esc(log.notes || '-')}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ============ TRAINING LOGS ============
+    function renderTrainingLogs() {
+      const tbody = document.getElementById('trainingTableBody');
+      if (!trainingLogs || trainingLogs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">No training records yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = trainingLogs.map(log => {
+        const isOverdue = log.next_scheduled && new Date(log.next_scheduled) < new Date();
+        return `
+          <tr style="${isOverdue ? 'background:#fef2f2;' : ''}">
+            <td>${formatDate(log.date)}</td>
+            <td>${esc(log.type)}</td>
+            <td><span class="badge ${log.scheduled ? 'badge-yes' : 'badge-no'}">${log.scheduled ? 'Yes' : 'No'}</span></td>
+            <td>${esc(log.pilot_name)}</td>
+            <td style="${isOverdue ? 'color:#dc2626;font-weight:600;' : ''}">${log.next_scheduled ? formatDate(log.next_scheduled) : '-'}</td>
+            <td>${esc(log.notes || '-')}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ============ INCIDENT REPORTS ============
+    function renderIncidentReports() {
+      const noMsg = document.getElementById('noIncidentsMsg');
+      const tableContainer = document.getElementById('incidentsTableContainer');
+      const tbody = document.getElementById('incidentsTableBody');
+
+      if (!incidentReports || incidentReports.length === 0) {
+        noMsg.style.display = 'block';
+        tableContainer.style.display = 'none';
+        return;
+      }
+
+      noMsg.style.display = 'none';
+      tableContainer.style.display = 'block';
+
+      tbody.innerHTML = incidentReports.map(report => `
+        <tr>
+          <td>${formatDate(report.date)}</td>
+          <td>${esc(report.time || '-')}</td>
+          <td>${esc(report.location)}</td>
+          <td><span class="badge badge-${report.severity === 'Minor' ? 'minor' : 'serious'}">${report.severity}</span></td>
+          <td>${esc(report.pilot_name || '-')}</td>
+          <td><span class="badge ${report.injuries ? 'badge-serious' : 'badge-yes'}">${report.injuries ? 'Yes' : 'No'}</span></td>
+          <td><span class="badge ${report.reported_to_iaa ? 'badge-yes' : 'badge-no'}">${report.reported_to_iaa ? 'Yes' : 'No'}</span></td>
+          <td><button class="add-btn" style="padding:0.25rem 0.5rem;font-size:0.75rem;" onclick="viewIncident(${report.id})">View</button></td>
+        </tr>
+      `).join('');
+    }
+
+    // ============ MODAL FUNCTIONS ============
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove('active');
+    }
+
+    function showMaintenanceForm() {
+      document.getElementById('maintenanceForm').reset();
+      document.getElementById('maintenanceModal').classList.add('active');
+    }
+
+    function showTrainingForm() {
+      document.getElementById('trainingForm').reset();
+      document.getElementById('trainingModal').classList.add('active');
+    }
+
+    function showIncidentForm() {
+      document.getElementById('incidentForm').reset();
+      document.getElementById('incidentModal').classList.add('active');
+    }
+
+    function showNewFlightPlanForm() {
+      const form = document.getElementById('newFlightPlanForm');
+      form.reset();
+      // Set default date to today
+      form.querySelector('[name="date"]').value = new Date().toISOString().split('T')[0];
+      document.getElementById('newFlightPlanModal').classList.add('active');
+    }
+
+    async function createFlightPlan(e) {
+      e.preventDefault();
+      const form = e.target;
+      const formData = new FormData(form);
+      const data = Object.fromEntries(formData.entries());
+
+      try {
+        const res = await fetch('/api/flight-plans', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (res.ok) {
+          const newPlan = await res.json();
+          flightPlans.unshift(newPlan);
+          renderFlightPlans();
+          closeModal('newFlightPlanModal');
+          alert('Flight plan created successfully!');
+        } else {
+          const err = await res.json();
+          alert('Error: ' + (err.error || 'Failed to create flight plan'));
+        }
+      } catch (err) {
+        console.error('Error creating flight plan:', err);
+        alert('Error creating flight plan. Please try again.');
+      }
+    }
+
+    function showImportLogsForm() {
+      const form = document.getElementById('importLogsForm');
+      form.reset();
+
+      // Populate flight plans dropdown
+      const planOptions = flightPlans.map(p => `<option value="${p.id}">${p.name} (${p.date})</option>`).join('');
+      document.getElementById('importLogsPlanSelect').innerHTML = '<option value="">Select flight plan...</option>' + planOptions;
+
+      // Populate pilot dropdowns
+      const pilotOptions = pilots.map(p => `<option value="${p.code}">${p.name}</option>`).join('');
+      document.getElementById('importLogsPicSelect').innerHTML = '<option value="">Select pilot...</option>' + pilotOptions;
+      document.getElementById('importLogsAssistantSelect').innerHTML = '<option value="">None</option>' + pilotOptions;
+
+      // Populate drones dropdown
+      const droneOptions = drones.filter(d => d.status === 'Active').map(d => `<option value="${d.name}">${d.name}</option>`).join('');
+      document.getElementById('importLogsDroneSelect').innerHTML = '<option value="">Select drone...</option>' + droneOptions;
+
+      // Populate batteries dropdown
+      const batteryOptions = batteryLogs.filter(b => b.status === 'Active').map(b => `<option value="${b.serial_number}">${b.name} (${b.serial_number})</option>`).join('');
+      document.getElementById('importLogsBatterySelect').innerHTML = '<option value="">Select battery...</option>' + batteryOptions;
+
+      document.getElementById('importLogsModal').classList.add('active');
+    }
+
+    async function importAirDataLogs(e) {
+      e.preventDefault();
+      const form = e.target;
+      const formData = new FormData(form);
+
+      try {
+        const res = await fetch('/api/flight-logs/import-airdata', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (res.ok) {
+          const result = await res.json();
+          closeModal('importLogsModal');
+          await loadAllData(); // Reload all data to update stats
+          alert(`Flight log imported successfully!\n\nDuration: ${result.summary.duration_minutes} minutes\nMax Altitude: ${result.summary.max_altitude_ft} ft\nMax Speed: ${result.summary.max_speed_mph} mph`);
+        } else {
+          const err = await res.json();
+          alert('Error: ' + (err.error || 'Failed to import flight log'));
+        }
+      } catch (err) {
+        console.error('Error importing AirData:', err);
+        alert('Error importing flight log. Please try again.');
+      }
+    }
+
+    function populateFormDropdowns() {
+      // Populate pilot selects
+      const pilotOptions = pilots.map(p => `<option value="${p.id}" data-name="${p.name}">${p.name}</option>`).join('');
+      document.getElementById('trainingPilotSelect').innerHTML = '<option value="">Select pilot...</option>' + pilotOptions;
+      document.getElementById('incidentPilotSelect').innerHTML = '<option value="">Select pilot...</option>' + pilotOptions;
+
+      // Populate drone selects
+      const droneOptions = drones.filter(d => d.status === 'Active').map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+      document.getElementById('maintenanceDroneSelect').innerHTML = droneOptions;
+    }
+
+    // ============ FORM SUBMISSIONS ============
+    async function submitMaintenanceForm(e) {
+      e.preventDefault();
+      const form = e.target;
+      const formData = new FormData(form);
+      const data = Object.fromEntries(formData.entries());
+
+      try {
+        const res = await fetch('/api/maintenance-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (res.ok) {
+          const newLog = await res.json();
+          maintenanceLogs.push(newLog);
+          renderMaintenanceLogs();
+          closeModal('maintenanceModal');
+        }
+      } catch (err) {
+        console.error('Error saving maintenance log:', err);
+      }
+    }
+
+    async function submitTrainingForm(e) {
+      e.preventDefault();
+      const form = e.target;
+      const formData = new FormData(form);
+      const data = Object.fromEntries(formData.entries());
+
+      // Get pilot name from select
+      const select = document.getElementById('trainingPilotSelect');
+      data.pilot_name = select.options[select.selectedIndex].dataset.name;
+
+      try {
+        const res = await fetch('/api/training-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (res.ok) {
+          const newLog = await res.json();
+          trainingLogs.push(newLog);
+          renderTrainingLogs();
+          closeModal('trainingModal');
+        }
+      } catch (err) {
+        console.error('Error saving training log:', err);
+      }
+    }
+
+    async function submitIncidentForm(e) {
+      e.preventDefault();
+      const form = e.target;
+      const formData = new FormData(form);
+      const data = Object.fromEntries(formData.entries());
+
+      // Get pilot name from select
+      const select = document.getElementById('incidentPilotSelect');
+      data.pilot_name = select.options[select.selectedIndex].dataset.name;
+
+      try {
+        const res = await fetch('/api/incident-reports', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (res.ok) {
+          const newReport = await res.json();
+          incidentReports.push(newReport);
+          renderIncidentReports();
+          closeModal('incidentModal');
+        }
+      } catch (err) {
+        console.error('Error saving incident report:', err);
+      }
+    }
+
+    function viewIncident(id) {
+      const report = incidentReports.find(r => r.id === id);
+      if (report) {
+        alert(`Incident Details:\n\nDate: ${report.date}\nTime: ${report.time}\nLocation: ${report.location}\nSeverity: ${report.severity}\nPilot: ${report.pilot_name}\n\nDescription:\n${report.description}\n\nActions Taken:\n${report.actions_taken || 'N/A'}\n\nLessons Learned:\n${report.lessons_learned || 'N/A'}`);
+      }
+    }
+
+    // ============ EVIDENCE MANAGEMENT ============
+    let currentPlanId = null;
+    let currentEvidence = {};
+
+    // File upload categories (in display order)
+    const fileCategories = [
+      { key: 'flightGeography', title: 'Flight Geography Map', subtitle: 'DroneDeck map screenshot', accept: 'image/*', isLargeCard: true },
+      { key: 'emergencyResponsePlan', title: 'Emergency Response Plan', subtitle: 'ERP image for this operation', accept: 'image/*' },
+      { key: 'weather', title: 'Weather', subtitle: 'Weather conditions screenshot', accept: 'image/*' },
+      { key: 'nearbyEvents', title: 'Nearby Events', subtitle: 'Local events check', accept: 'image/*' },
+      { key: 'notams', title: 'NOTAMs / PIB', subtitle: 'Pre-flight Information Bulletin', accept: '.pdf,image/*' },
+      { key: 'uf101Permission', title: 'U.F.101 Permission', subtitle: 'IAA approval confirmation', accept: 'image/*' },
+      { key: 'uf101Application', title: 'U.F.101 Application', subtitle: 'Application form submitted to IAA', accept: '.pdf' }
+    ];
+
+    const defaultEvidence = {
+      planning: { pilotInCommand: null, assistant: null, ftsOperator: null, ftsModel: 'Zephyr CC MVC3' },
+      flightGeographyData: { latitude: null, longitude: null, operationalScenario: null, flightObjective: 'Photo & Video', flightCondition: 'Specific category', maxHeight: null, groundRiskBuffer: null, maxFlightSpeed: null, contingencyVolume: null, adjacentArea: null },
+      airspaceZones: [],
+      flightGeography: [], emergencyResponsePlan: [], weather: [], nearbyEvents: [], notams: [], uf101Permission: [], uf101Application: []
+    };
+
+    async function loadEvidence(planId) {
+      try {
+        const res = await safeFetch(`/api/flight-plans/${planId}/evidence`);
+        currentEvidence = { ...defaultEvidence, ...res };
+        renderEvidence();
+        updateDetailHeader(); // Update header with evidence data (lat/long, max altitude)
+      } catch (err) {
+        console.error('Error loading evidence:', err);
+        currentEvidence = { ...defaultEvidence };
+        renderEvidence();
+      }
+    }
+
+    function renderEvidence() {
+      const container = document.getElementById('evidenceCategories');
+      const planning = currentEvidence.planning || {};
+      const geoData = currentEvidence.flightGeographyData || {};
+      const zones = currentEvidence.airspaceZones || [];
+
+      container.innerHTML = `
+        <!-- BENTO GRID: Planning + Airspace Zones -->
+        <div class="evidence-bento">
+          <!-- Planning -->
+          <div class="evidence-bento-item">
+            <div class="evidence-form-header">
+              <div class="evidence-category-title">📋 Crew Assignment</div>
+              <button class="upload-btn" onclick="showPlanningForm()">✏️ Edit</button>
+            </div>
+            <div class="evidence-form-data">
+              ${planning.pilotInCommand || planning.assistant || planning.ftsOperator ? `
+                <div class="form-data-row"><strong>PIC:</strong> ${esc(planning.pilotInCommand || 'Not set')}</div>
+                <div class="form-data-row"><strong>Assistant:</strong> ${esc(planning.assistant || 'None')}</div>
+                <div class="form-data-row"><strong>FTS Operator:</strong> ${esc(planning.ftsOperator || 'Not set')}</div>
+                <div class="form-data-row"><strong>FTS Model:</strong> ${esc(planning.ftsModel || 'Zephyr CC MVC3')}</div>
+              ` : '<div class="evidence-empty">Click Edit to set crew</div>'}
+            </div>
+          </div>
+
+          <!-- Airspace Zones -->
+          <div class="evidence-bento-item">
+            <div class="evidence-form-header">
+              <div class="evidence-category-title">🌐 Airspace Zones</div>
+              <button class="upload-btn" onclick="showAirspaceZonesForm()">✏️ Edit</button>
+            </div>
+            <div class="evidence-form-data">
+              ${zones.length > 0 ? `
+                <div class="zones-list">
+                  ${zones.map(zone => `<div class="zone-tag">${esc(zone)}</div>`).join('')}
+                </div>
+              ` : '<div class="evidence-empty">Click Edit to add zones</div>'}
+            </div>
+          </div>
+
+          <!-- Operation Map -->
+          <div class="evidence-bento-item">
+            <div class="evidence-form-header">
+              <div class="evidence-category-title">🗺️ Operation Map</div>
+              <label class="upload-btn">
+                <span>+ Upload</span>
+                <input type="file" class="upload-input" accept="image/*" onchange="uploadEvidence('flightGeography', this)">
+              </label>
+            </div>
+            <div class="evidence-map-container">
+              ${(currentEvidence.flightGeography || []).length > 0
+                ? `<img class="evidence-map-image" src="${currentEvidence.flightGeography[0].path}" alt="Flight Geography Map" onclick="openImageModal('${currentEvidence.flightGeography[0].path}')">`
+                : '<div class="evidence-empty" style="padding:3rem;">Upload map from DroneDeck</div>'}
+            </div>
+          </div>
+
+          <!-- Flight Parameters -->
+          <div class="evidence-bento-item">
+            <div class="evidence-form-header">
+              <div class="evidence-category-title">📐 Flight Parameters</div>
+              <button class="upload-btn" onclick="showFlightGeographyForm()">✏️ Edit</button>
+            </div>
+            <div class="evidence-form-data">
+              ${geoData.latitude || geoData.maxHeight ? `
+                <div class="form-data-row"><strong>Location:</strong> ${geoData.latitude || '-'}, ${geoData.longitude || '-'}</div>
+                <div class="form-data-row"><strong>Scenario:</strong> ${esc(geoData.operationalScenario || '-')}</div>
+                <div class="form-data-row"><strong>Objective:</strong> ${esc(geoData.flightObjective || 'Photo & Video')}</div>
+                <div class="form-data-row"><strong>Condition:</strong> ${esc(geoData.flightCondition || 'Specific category')}</div>
+                <div class="form-data-row"><strong>Max Height:</strong> ${geoData.maxHeight || '-'}m</div>
+                <div class="form-data-row"><strong>Ground Risk:</strong> ${geoData.groundRiskBuffer || '-'}m</div>
+                <div class="form-data-row"><strong>Max Speed:</strong> ${geoData.maxFlightSpeed || '-'} m/s</div>
+                <div class="form-data-row"><strong>Contingency:</strong> ${esc(geoData.contingencyVolume || '-')}</div>
+                <div class="form-data-row"><strong>Adjacent:</strong> ${esc(geoData.adjacentArea || '-')}</div>
+              ` : '<div class="evidence-empty">Click Edit to set flight parameters</div>'}
+            </div>
+          </div>
+        </div>
+
+        <!-- FILE UPLOAD SECTIONS -->
+        <div class="evidence-section-group">
+          <div class="evidence-section-title">📁 Evidence Documents</div>
+          <div class="evidence-bento-docs">
+            ${fileCategories.filter(cat => cat.key !== 'flightGeography').map(cat => {
+              const files = currentEvidence[cat.key] || [];
+              return `
+                <div class="evidence-bento-item">
+                  <div class="evidence-form-header">
+                    <div>
+                      <div class="evidence-category-title">${cat.title}</div>
+                      <div class="evidence-category-subtitle" style="font-size:0.75rem;color:var(--text-secondary);">${cat.subtitle}</div>
+                    </div>
+                    <label class="upload-btn">
+                      <span>+</span>
+                      <input type="file" class="upload-input" accept="${cat.accept}" onchange="uploadEvidence('${cat.key}', this)" multiple>
+                    </label>
+                  </div>
+                  <div class="evidence-files" id="evidence-${cat.key}">
+                    ${files.length === 0
+                      ? '<div class="evidence-empty">No files</div>'
+                      : files.map(file => `
+                          <div class="evidence-file">
+                            ${file.fileType === 'image'
+                              ? `<img class="evidence-preview" src="${file.path}" alt="${esc(file.originalName)}" onclick="openImageModal('${file.path}')">`
+                              : `<div class="evidence-preview-pdf" onclick="window.open('${file.path}', '_blank')">📄</div>`}
+                            <div class="evidence-file-info">
+                              <div class="evidence-file-name" title="${esc(file.originalName)}">${esc(file.originalName)}</div>
+                              <div class="evidence-file-date">${formatDate(file.uploadDate)}</div>
+                            </div>
+                            <button class="evidence-delete" onclick="deleteEvidence('${cat.key}', ${file.id})">×</button>
+                          </div>
+                        `).join('')}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // ============ FORM HANDLERS ============
+    function showPlanningForm() {
+      const planning = currentEvidence.planning || {};
+
+      // Populate pilot dropdowns
+      const pilotOptions = pilots.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
+      document.getElementById('planningPIC').innerHTML = '<option value="">Select pilot...</option>' + pilotOptions;
+      document.getElementById('planningAssistant').innerHTML = '<option value="">None</option>' + pilotOptions;
+      document.getElementById('planningFTSOperator').innerHTML = '<option value="">Select operator...</option>' + pilotOptions;
+
+      // Set values
+      document.getElementById('planningPIC').value = planning.pilotInCommand || '';
+      document.getElementById('planningAssistant').value = planning.assistant || '';
+      document.getElementById('planningFTSOperator').value = planning.ftsOperator || '';
+      document.getElementById('planningFTSModel').value = planning.ftsModel || 'Zephyr CC MVC3';
+      document.getElementById('planningModal').classList.add('active');
+    }
+
+    async function submitPlanningForm(e) {
+      e.preventDefault();
+      const data = {
+        pilotInCommand: document.getElementById('planningPIC').value,
+        assistant: document.getElementById('planningAssistant').value,
+        ftsOperator: document.getElementById('planningFTSOperator').value,
+        ftsModel: document.getElementById('planningFTSModel').value || 'Zephyr CC MVC3'
+      };
+      try {
+        const res = await fetch(`/api/flight-plans/${currentPlanId}/evidence/planning`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+        });
+        if (res.ok) {
+          currentEvidence.planning = await res.json();
+          renderEvidence();
+          closeModal('planningModal');
+        }
+      } catch (err) { console.error('Error saving planning:', err); }
+    }
+
+    function showFlightGeographyForm() {
+      const geo = currentEvidence.flightGeographyData || {};
+      document.getElementById('geoLatitude').value = geo.latitude || '';
+      document.getElementById('geoLongitude').value = geo.longitude || '';
+      document.getElementById('geoScenario').value = geo.operationalScenario || '';
+      document.getElementById('geoObjective').value = geo.flightObjective || 'Photo & Video';
+      document.getElementById('geoCondition').value = geo.flightCondition || 'Specific category';
+      document.getElementById('geoMaxHeight').value = geo.maxHeight || '';
+      document.getElementById('geoGroundRisk').value = geo.groundRiskBuffer || '';
+      document.getElementById('geoMaxSpeed').value = geo.maxFlightSpeed || '';
+      document.getElementById('geoContingency').value = geo.contingencyVolume || '';
+      document.getElementById('geoAdjacent').value = geo.adjacentArea || '';
+      document.getElementById('flightGeographyModal').classList.add('active');
+    }
+
+    async function submitFlightGeographyForm(e) {
+      e.preventDefault();
+      const data = {
+        latitude: document.getElementById('geoLatitude').value,
+        longitude: document.getElementById('geoLongitude').value,
+        operationalScenario: document.getElementById('geoScenario').value,
+        flightObjective: document.getElementById('geoObjective').value,
+        flightCondition: document.getElementById('geoCondition').value,
+        maxHeight: document.getElementById('geoMaxHeight').value,
+        groundRiskBuffer: document.getElementById('geoGroundRisk').value,
+        maxFlightSpeed: document.getElementById('geoMaxSpeed').value,
+        contingencyVolume: document.getElementById('geoContingency').value,
+        adjacentArea: document.getElementById('geoAdjacent').value
+      };
+      try {
+        const res = await fetch(`/api/flight-plans/${currentPlanId}/evidence/flightGeographyData`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+        });
+        if (res.ok) {
+          currentEvidence.flightGeographyData = await res.json();
+          renderEvidence();
+          updateDetailHeader(); // Update header with new lat/long and max altitude
+          closeModal('flightGeographyModal');
+        }
+      } catch (err) { console.error('Error saving geography:', err); }
+    }
+
+    function showAirspaceZonesForm() {
+      const zones = currentEvidence.airspaceZones || [];
+      document.getElementById('airspaceZonesText').value = zones.join('\n');
+      document.getElementById('airspaceZonesModal').classList.add('active');
+    }
+
+    async function submitAirspaceZonesForm(e) {
+      e.preventDefault();
+      const text = document.getElementById('airspaceZonesText').value;
+      const zones = text.split('\n').map(z => z.trim()).filter(z => z.length > 0);
+      try {
+        const res = await fetch(`/api/flight-plans/${currentPlanId}/evidence/airspaceZones`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zones })
+        });
+        if (res.ok) {
+          const result = await res.json();
+          currentEvidence.airspaceZones = result.zones;
+          renderEvidence();
+          closeModal('airspaceZonesModal');
+        }
+      } catch (err) { console.error('Error saving zones:', err); }
+    }
+
+    async function uploadEvidence(category, input) {
+      const files = input.files;
+      if (!files.length || !currentPlanId) return;
+
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+          const res = await fetch(`/api/flight-plans/${currentPlanId}/evidence/${category}`, {
+            method: 'POST',
+            body: formData
+          });
+
+          if (res.ok) {
+            const newFile = await res.json();
+            if (!currentEvidence[category]) {
+              currentEvidence[category] = [];
+            }
+            currentEvidence[category].push(newFile);
+          } else {
+            const err = await res.json();
+            alert('Upload failed: ' + (err.error || 'Unknown error'));
+          }
+        } catch (err) {
+          console.error('Error uploading file:', err);
+          alert('Error uploading file');
+        }
+      }
+
+      renderEvidence();
+      input.value = ''; // Reset input
+    }
+
+    async function deleteEvidence(category, fileId) {
+      if (!confirm('Are you sure you want to delete this file?')) return;
+
+      try {
+        const res = await fetch(`/api/flight-plans/${currentPlanId}/evidence/${category}/${fileId}`, {
+          method: 'DELETE'
+        });
+
+        if (res.ok) {
+          currentEvidence[category] = currentEvidence[category].filter(f => f.id !== fileId);
+          renderEvidence();
+        }
+      } catch (err) {
+        console.error('Error deleting file:', err);
+      }
+    }
+
+    function openImageModal(src) {
+      document.getElementById('imageModalImg').src = src;
+      document.getElementById('imageModal').classList.add('active');
+    }
+
+    function closeImageModal() {
+      document.getElementById('imageModal').classList.remove('active');
+    }
+
+    // Close modal on escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeImageModal();
+      }
+    });
+
+    // Close modal on background click
+    document.getElementById('imageModal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'imageModal') {
+        closeImageModal();
+      }
+    });
+
+    const tabMap = {
+      plans: 'flightPlansTab',
+      logs: 'flightLogsTab',
+      drones: 'dronesTab',
+      batteries: 'batteriesTab',
+      maintenance: 'maintenanceTab',
+      training: 'trainingTab',
+      incidents: 'incidentsTab'
+    };
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        Object.values(tabMap).forEach(id => {
+          document.getElementById(id).style.display = 'none';
+        });
+        document.getElementById(tabMap[tab]).style.display = 'block';
+      });
+    });
+
+    searchInput.addEventListener('input', (e) => {
+      const filter = e.target.value;
+      renderFlightPlans(filter);
+      renderAllFlightLogs(filter);
+    });
+
+    function getStatusClass(status) {
+      if (!status) return 'status-planned';
+      const s = status.toLowerCase();
+      if (s.includes('complete')) return 'status-completed';
+      if (s.includes('progress')) return 'status-in-progress';
+      return 'status-planned';
+    }
+    function formatDate(d) {
+      if (!d) return '-';
+      return new Date(d).toLocaleDateString('en-IE', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+    function formatDuration(sec) {
+      if (!sec) return '-';
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      if (h > 0) return `${h}h ${m}m`;
+      if (m > 0) return `${m}m ${s}s`;
+      return `${s}s`;
+    }
+    function esc(t) {
+      if (!t) return '';
+      const d = document.createElement('div');
+      d.textContent = t;
+      return d.innerHTML;
+    }
+
+    checkAuth();
+  </script>
+</body>
+</html>
