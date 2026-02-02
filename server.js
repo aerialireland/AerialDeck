@@ -1,5 +1,5 @@
 const express = require('express');
-const session = require('express-session');
+const cookieSession = require('cookie-session');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
@@ -91,20 +91,16 @@ app.use((req, res, next) => {
 });
 app.use(express.static(path.join(__dirname, 'public')));
 // Trust proxy for Vercel
-if (isVercel) {
-  app.set('trust proxy', 1);
-}
+app.set('trust proxy', 1);
 
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'aerialdeck-secret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: isVercel, // true on Vercel (HTTPS), false locally
-    httpOnly: true,
-    sameSite: 'lax',
-    maxAge: 24 * 60 * 60 * 1000
-  }
+// Use cookie-session for serverless compatibility
+app.use(cookieSession({
+  name: 'aerialdeck_session',
+  keys: [process.env.SESSION_SECRET || 'aerialdeck-secret-key-2026'],
+  maxAge: 24 * 60 * 60 * 1000, // 24 hours
+  secure: isVercel, // HTTPS only on Vercel
+  httpOnly: true,
+  sameSite: 'lax'
 }));
 
 // Auth middleware
