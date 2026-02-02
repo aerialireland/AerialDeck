@@ -1861,26 +1861,11 @@
       detailView.classList.add('active');
       currentPlanId = planId; // Set current plan for evidence
       loadEvidence(planId); // Load evidence for this plan
-      const status = plan?.status || 'Completed';
-      const statusClass = getStatusClass(status);
-      const totalMinutes = planLogs.reduce((s, l) => s + (parseFloat(l.air_time_minutes) || 0), 0);
-      document.getElementById('detailHeader').innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <h2>${esc(plan?.name || 'Flight Plan')}</h2>
-          <span class="status-badge ${statusClass}">${esc(status)}</span>
-        </div>
-        <div class="detail-info">
-          <div class="detail-info-item"><label>Date</label><span>${formatDate(plan?.date)}</span></div>
-          <div class="detail-info-item"><label>Location</label><span>${esc(plan?.location || plan?.geozone || '-')}</span></div>
-          <div class="detail-info-item"><label>Max Altitude</label><span>${plan?.max_altitude || '-'}m</span></div>
-          <div class="detail-info-item"><label>Flight Logs</label><span>${planLogs.length}</span></div>
-          <div class="detail-info-item"><label>Total Time</label><span>${totalMinutes.toFixed(1)}m</span></div>
-        </div>
-      `;
+      updateDetailHeader(plan, planLogs);
       document.getElementById('flightLogsContainer').innerHTML = planLogs.length === 0
         ? '<div class="no-data">No flight logs</div>'
         : `<table class="flight-logs-table">
-            <thead><tr><th>Date</th><th>Drone</th><th>Pilot</th><th>Duration</th><th>Mode</th><th>Max Alt</th><th>Max Speed</th><th>Battery</th><th>FTS</th></tr></thead>
+            <thead><tr><th>Date</th><th>Drone</th><th>Pilot</th><th>Duration</th><th>Mode</th><th>Battery</th><th>FTS</th></tr></thead>
             <tbody>${planLogs.map(log => {
               const mode = log.flight_mode === 'N' ? 'Normal' : log.flight_mode === 'C' ? 'Cine' : log.flight_mode === 'S' ? 'Sports' : log.flight_mode || '-';
               const isFTS = log.fts_activation === 1;
@@ -1891,13 +1876,48 @@
                 <td>${esc(log.pic || '-')}</td>
                 <td>${(parseFloat(log.air_time_minutes) || 0).toFixed(1)}m</td>
                 <td>${mode}</td>
-                <td>${log.max_altitude || '-'}m</td>
-                <td>${log.max_speed || '-'} km/h</td>
                 <td>${esc(log.battery || '-')}</td>
                 <td>${isFTS ? '<span style="color:#dc2626;font-weight:600;">✓</span>' : '-'}</td>
               </tr>
             `;}).join('')}</tbody>
           </table>`;
+    }
+
+    // Helper function to update detail header with evidence data
+    function updateDetailHeader(plan, planLogs) {
+      if (!plan) plan = flightPlans.find(p => p.id === currentPlanId);
+      if (!planLogs) planLogs = flightLogs.filter(l => l.flight_plan_id === currentPlanId);
+
+      const status = plan?.status || 'Completed';
+      const statusClass = getStatusClass(status);
+      const totalMinutes = planLogs.reduce((s, l) => s + (parseFloat(l.air_time_minutes) || 0), 0);
+
+      // Get location from evidence flightGeographyData if available
+      const geo = currentEvidence?.flightGeographyData || {};
+      let locationDisplay = esc(plan?.location || plan?.geozone || '-');
+      if (geo.latitude && geo.longitude) {
+        locationDisplay = `${geo.latitude}, ${geo.longitude}`;
+      }
+
+      // Get max altitude from evidence flightGeographyData if available
+      let maxAltDisplay = plan?.max_altitude || '-';
+      if (geo.maxHeight) {
+        maxAltDisplay = geo.maxHeight;
+      }
+
+      document.getElementById('detailHeader').innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <h2>${esc(plan?.name || 'Flight Plan')}</h2>
+          <span class="status-badge ${statusClass}">${esc(status)}</span>
+        </div>
+        <div class="detail-info">
+          <div class="detail-info-item"><label>Date</label><span>${formatDate(plan?.date)}</span></div>
+          <div class="detail-info-item"><label>Location</label><span>${locationDisplay}</span></div>
+          <div class="detail-info-item"><label>Max Altitude</label><span>${maxAltDisplay}m</span></div>
+          <div class="detail-info-item"><label>Flight Logs</label><span>${planLogs.length}</span></div>
+          <div class="detail-info-item"><label>Total Time</label><span>${totalMinutes.toFixed(1)}m</span></div>
+        </div>
+      `;
     }
 
     document.getElementById('backBtn').addEventListener('click', () => {
@@ -2409,6 +2429,7 @@
         if (res.ok) {
           currentEvidence.flightGeographyData = await res.json();
           renderEvidence();
+          updateDetailHeader(); // Update header with new lat/long and max altitude
           closeModal('flightGeographyModal');
         }
       } catch (err) { console.error('Error saving geography:', err); }
