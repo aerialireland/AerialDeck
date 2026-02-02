@@ -219,6 +219,9 @@
     .card-modes { grid-column: span 2; }
     .card-avgtime { grid-column: span 2; }
     .card-batteries { grid-column: span 5; }
+    .card-audit-days { grid-column: span 3; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    .audit-days-count { font-size: 4rem; font-weight: 800; color: var(--accent-dark); line-height: 1; margin: 0.5rem 0; }
+    .audit-days-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
 
     .pilot-bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
     .pilot-bar .name { width: 100px; font-size: 0.8rem; font-weight: 500; }
@@ -1721,6 +1724,17 @@
               }).join('');
             })()}
           </div>
+        </div>
+        <div class="bento-card card-audit-days">
+          <h3>Days Since Last Audit</h3>
+          <div class="audit-days-count">${(() => {
+            const lastAudit = new Date('2025-06-05');
+            const today = new Date();
+            const diffTime = Math.abs(today - lastAudit);
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays;
+          })()}</div>
+          <div class="audit-days-label">days</div>
         </div>
       `;
 
