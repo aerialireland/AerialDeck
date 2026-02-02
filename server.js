@@ -122,7 +122,7 @@ app.post('/api/login', (req, res) => {
 });
 
 app.post('/api/logout', (req, res) => {
-  req.session.destroy();
+  req.session = null; // cookie-session uses null to clear session
   res.json({ success: true });
 });
 
