@@ -9,8 +9,7 @@ require('dotenv').config();
 // Import Supabase client
 const supabase = require('./database/supabase.js');
 
-// Import local data for evidence (file-based storage for now)
-const localData = require('./database/local-data.js');
+// Note: localData.js is no longer needed - all data now stored in Supabase
 
 // ============ FILE UPLOAD SETUP ============
 // Vercel has read-only filesystem - use /tmp or memory storage
@@ -173,6 +172,14 @@ app.post('/api/flight-plans', requireAuth, async (req, res) => {
   try {
     const { name, date, location, geozone, max_altitude, status } = req.body;
 
+    // Initialize with default evidence structure
+    const initialEvidence = {
+      planning: { pilotInCommand: null, assistant: null, ftsOperator: null, ftsModel: 'Zephyr CC MVC3' },
+      flightGeographyData: { latitude: null, longitude: null, operationalScenario: null, flightObjective: 'Photo & Video', flightCondition: 'Specific category', maxHeight: null, groundRiskBuffer: null, maxFlightSpeed: null, contingencyVolume: null, adjacentArea: null },
+      airspaceZones: [],
+      flightGeography: [], emergencyResponsePlan: [], weather: [], nearbyEvents: [], notams: [], uf101Permission: [], uf101Application: []
+    };
+
     const { data, error } = await supabase
       .from('flight_plans')
       .insert([{
@@ -181,20 +188,13 @@ app.post('/api/flight-plans', requireAuth, async (req, res) => {
         location,
         geozone: geozone || null,
         max_altitude: max_altitude || 120,
-        status: status || 'Planned'
+        status: status || 'Planned',
+        evidence: initialEvidence
       }])
       .select()
       .single();
 
     if (error) throw error;
-
-    // Initialize evidence for this plan
-    localData.flightPlanEvidence[data.id] = {
-      planning: { pilotInCommand: null, assistant: null, ftsOperator: null, ftsModel: 'Zephyr CC MVC3' },
-      flightGeographyData: { latitude: null, longitude: null, operationalScenario: null, flightObjective: 'Photo & Video', flightCondition: 'Specific category', maxHeight: null, groundRiskBuffer: null, maxFlightSpeed: null, contingencyVolume: null, adjacentArea: null },
-      airspaceZones: [],
-      flightGeography: [], emergencyResponsePlan: [], weather: [], nearbyEvents: [], notams: [], uf101Permission: [], uf101Application: []
-    };
 
     res.json(data);
   } catch (err) {
@@ -497,102 +497,214 @@ app.get('/api/dashboard/recent', requireAuth, async (req, res) => {
   }
 });
 
-// ============ LOCAL DATA ROUTES (Maintenance, Training, Incidents, Evidence) ============
-// These remain file-based for now - will migrate to Supabase later
+// ============ SUPABASE DATA ROUTES (Maintenance, Training, Incidents) ============
+// All data now persisted in Supabase for reliability on Vercel
 
-app.get('/api/maintenance-logs', requireAuth, (req, res) => {
-  const logs = localData.maintenanceLogs.map(log => {
-    const drone = localData.drones.find(d => d.id === log.drone_id);
-    return { ...log, drone_name: drone?.name || 'Unknown' };
-  });
-  res.json(logs);
-});
+app.get('/api/maintenance-logs', requireAuth, async (req, res) => {
+  try {
+    const { data: logs, error } = await supabase
+      .from('maintenance_logs')
+      .select('*, drones(name)')
+      .order('date', { ascending: false });
 
-app.post('/api/maintenance-logs', requireAuth, (req, res) => {
-  const newLog = {
-    id: localData.maintenanceLogs.length + 1,
-    ...req.body,
-    scheduled: req.body.scheduled === true || req.body.scheduled === 'true'
-  };
-  localData.maintenanceLogs.push(newLog);
-  res.json(newLog);
-});
+    if (error) throw error;
 
-app.get('/api/training-logs', requireAuth, (req, res) => {
-  res.json(localData.trainingLogs);
-});
+    const logsWithDroneName = logs.map(log => ({
+      ...log,
+      drone_name: log.drones?.name || 'Unknown'
+    }));
 
-app.post('/api/training-logs', requireAuth, (req, res) => {
-  const newLog = {
-    id: localData.trainingLogs.length + 1,
-    ...req.body,
-    scheduled: req.body.scheduled === true || req.body.scheduled === 'true'
-  };
-  localData.trainingLogs.push(newLog);
-  res.json(newLog);
-});
-
-app.get('/api/incident-reports', requireAuth, (req, res) => {
-  res.json(localData.incidentReports);
-});
-
-app.post('/api/incident-reports', requireAuth, (req, res) => {
-  const newReport = {
-    id: localData.incidentReports.length + 1,
-    ...req.body,
-    created_at: new Date().toISOString()
-  };
-  localData.incidentReports.push(newReport);
-  res.json(newReport);
-});
-
-// ============ EVIDENCE ROUTES (File-based) ============
-
-app.get('/api/flight-plans/:planId/evidence', requireAuth, (req, res) => {
-  const planId = req.params.planId;
-  const defaultEvidence = {
-    planning: { pilotInCommand: null, assistant: null, ftsOperator: null, ftsModel: 'Zephyr CC MVC3' },
-    flightGeographyData: { latitude: null, longitude: null, operationalScenario: null, flightObjective: 'Photo & Video', flightCondition: 'Specific category', maxHeight: null, groundRiskBuffer: null, maxFlightSpeed: null, contingencyVolume: null, adjacentArea: null },
-    airspaceZones: [],
-    flightGeography: [], emergencyResponsePlan: [], weather: [], nearbyEvents: [], notams: [], uf101Permission: [], uf101Application: []
-  };
-  res.json(localData.flightPlanEvidence[planId] || defaultEvidence);
-});
-
-app.post('/api/flight-plans/:planId/evidence/planning', requireAuth, (req, res) => {
-  const { planId } = req.params;
-  if (!localData.flightPlanEvidence[planId]) {
-    localData.flightPlanEvidence[planId] = {
-      planning: {}, flightGeographyData: {}, airspaceZones: [],
-      flightGeography: [], emergencyResponsePlan: [], weather: [], nearbyEvents: [], notams: [], uf101Permission: [], uf101Application: []
-    };
+    res.json(logsWithDroneName);
+  } catch (err) {
+    console.error('Error fetching maintenance logs:', err);
+    res.status(500).json({ error: 'Failed to fetch maintenance logs' });
   }
-  localData.flightPlanEvidence[planId].planning = req.body;
-  res.json(localData.flightPlanEvidence[planId].planning);
 });
 
-app.post('/api/flight-plans/:planId/evidence/flightGeographyData', requireAuth, (req, res) => {
-  const { planId } = req.params;
-  if (!localData.flightPlanEvidence[planId]) {
-    localData.flightPlanEvidence[planId] = {
-      planning: {}, flightGeographyData: {}, airspaceZones: [],
-      flightGeography: [], emergencyResponsePlan: [], weather: [], nearbyEvents: [], notams: [], uf101Permission: [], uf101Application: []
-    };
+app.post('/api/maintenance-logs', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('maintenance_logs')
+      .insert([{
+        date: req.body.date,
+        type: req.body.type,
+        scheduled: req.body.scheduled === true || req.body.scheduled === 'true',
+        performed_by: req.body.performed_by,
+        drone_id: req.body.drone_id,
+        next_scheduled: req.body.next_scheduled || null,
+        notes: req.body.notes || null
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error('Error creating maintenance log:', err);
+    res.status(500).json({ error: 'Failed to create maintenance log' });
   }
-  localData.flightPlanEvidence[planId].flightGeographyData = req.body;
-  res.json(localData.flightPlanEvidence[planId].flightGeographyData);
 });
 
-app.post('/api/flight-plans/:planId/evidence/airspaceZones', requireAuth, (req, res) => {
-  const { planId } = req.params;
-  if (!localData.flightPlanEvidence[planId]) {
-    localData.flightPlanEvidence[planId] = {
-      planning: {}, flightGeographyData: {}, airspaceZones: [],
-      flightGeography: [], emergencyResponsePlan: [], weather: [], nearbyEvents: [], notams: [], uf101Permission: [], uf101Application: []
-    };
+app.get('/api/training-logs', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('training_logs')
+      .select('*')
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error('Error fetching training logs:', err);
+    res.status(500).json({ error: 'Failed to fetch training logs' });
   }
-  localData.flightPlanEvidence[planId].airspaceZones = req.body.zones || [];
-  res.json({ zones: localData.flightPlanEvidence[planId].airspaceZones });
+});
+
+app.post('/api/training-logs', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('training_logs')
+      .insert([{
+        date: req.body.date,
+        type: req.body.type,
+        scheduled: req.body.scheduled === true || req.body.scheduled === 'true',
+        pilot_id: req.body.pilot_id,
+        pilot_name: req.body.pilot_name,
+        next_scheduled: req.body.next_scheduled || null,
+        notes: req.body.notes || null
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error('Error creating training log:', err);
+    res.status(500).json({ error: 'Failed to create training log' });
+  }
+});
+
+app.get('/api/incident-reports', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('incident_reports')
+      .select('*')
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error('Error fetching incident reports:', err);
+    res.status(500).json({ error: 'Failed to fetch incident reports' });
+  }
+});
+
+app.post('/api/incident-reports', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('incident_reports')
+      .insert([{
+        date: req.body.date,
+        type: req.body.type,
+        description: req.body.description,
+        pilot_id: req.body.pilot_id,
+        flight_plan_id: req.body.flight_plan_id,
+        severity: req.body.severity,
+        resolution: req.body.resolution,
+        reported_to_iaa: req.body.reported_to_iaa === true || req.body.reported_to_iaa === 'true',
+        notes: req.body.notes || null
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error('Error creating incident report:', err);
+    res.status(500).json({ error: 'Failed to create incident report' });
+  }
+});
+
+// ============ EVIDENCE ROUTES (Supabase-persisted) ============
+// Evidence data stored in flight_plans.evidence JSONB column
+// Files stored in Supabase Storage
+
+const defaultEvidence = {
+  planning: { pilotInCommand: null, assistant: null, ftsOperator: null, ftsModel: 'Zephyr CC MVC3' },
+  flightGeographyData: { latitude: null, longitude: null, operationalScenario: null, flightObjective: 'Photo & Video', flightCondition: 'Specific category', maxHeight: null, groundRiskBuffer: null, maxFlightSpeed: null, contingencyVolume: null, adjacentArea: null },
+  airspaceZones: [],
+  flightGeography: [], emergencyResponsePlan: [], weather: [], nearbyEvents: [], notams: [], uf101Permission: [], uf101Application: []
+};
+
+// Helper to get evidence from Supabase
+async function getEvidence(planId) {
+  const { data, error } = await supabase
+    .from('flight_plans')
+    .select('evidence')
+    .eq('id', planId)
+    .single();
+
+  if (error) throw error;
+  return data?.evidence || { ...defaultEvidence };
+}
+
+// Helper to save evidence to Supabase
+async function saveEvidence(planId, evidence) {
+  const { error } = await supabase
+    .from('flight_plans')
+    .update({ evidence })
+    .eq('id', planId);
+
+  if (error) throw error;
+}
+
+app.get('/api/flight-plans/:planId/evidence', requireAuth, async (req, res) => {
+  try {
+    const evidence = await getEvidence(req.params.planId);
+    res.json(evidence);
+  } catch (err) {
+    console.error('Error fetching evidence:', err);
+    res.json(defaultEvidence);
+  }
+});
+
+app.post('/api/flight-plans/:planId/evidence/planning', requireAuth, async (req, res) => {
+  try {
+    const { planId } = req.params;
+    const evidence = await getEvidence(planId);
+    evidence.planning = req.body;
+    await saveEvidence(planId, evidence);
+    res.json(evidence.planning);
+  } catch (err) {
+    console.error('Error saving planning data:', err);
+    res.status(500).json({ error: 'Failed to save planning data' });
+  }
+});
+
+app.post('/api/flight-plans/:planId/evidence/flightGeographyData', requireAuth, async (req, res) => {
+  try {
+    const { planId } = req.params;
+    const evidence = await getEvidence(planId);
+    evidence.flightGeographyData = req.body;
+    await saveEvidence(planId, evidence);
+    res.json(evidence.flightGeographyData);
+  } catch (err) {
+    console.error('Error saving flight geography data:', err);
+    res.status(500).json({ error: 'Failed to save flight geography data' });
+  }
+});
+
+app.post('/api/flight-plans/:planId/evidence/airspaceZones', requireAuth, async (req, res) => {
+  try {
+    const { planId } = req.params;
+    const evidence = await getEvidence(planId);
+    evidence.airspaceZones = req.body.zones || [];
+    await saveEvidence(planId, evidence);
+    res.json({ zones: evidence.airspaceZones });
+  } catch (err) {
+    console.error('Error saving airspace zones:', err);
+    res.status(500).json({ error: 'Failed to save airspace zones' });
+  }
 });
 
 app.post('/api/flight-plans/:planId/evidence/:category', requireAuth, upload.single('file'), async (req, res) => {
@@ -606,28 +718,25 @@ app.post('/api/flight-plans/:planId/evidence/:category', requireAuth, upload.sin
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
-  if (!localData.flightPlanEvidence[planId]) {
-    localData.flightPlanEvidence[planId] = {
-      planning: {}, flightGeographyData: {}, airspaceZones: [],
-      flightGeography: [], emergencyResponsePlan: [], weather: [], nearbyEvents: [], notams: [], uf101Permission: [], uf101Application: []
-    };
-  }
-  if (!localData.flightPlanEvidence[planId][category]) {
-    localData.flightPlanEvidence[planId][category] = [];
-  }
+  try {
+    const evidence = await getEvidence(planId);
+    if (!evidence[category]) {
+      evidence[category] = [];
+    }
 
-  let filePath;
-  const timestamp = Date.now();
-  const safeFilename = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+    let filePath;
+    const timestamp = Date.now();
+    const safeFilename = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
 
-  // On Vercel, upload to Supabase Storage
-  if (isVercel && req.file.buffer) {
-    try {
+    // Always upload to Supabase Storage for persistence
+    if (req.file.buffer || isVercel) {
       const storagePath = `evidence/${planId}/${category}/${timestamp}_${safeFilename}`;
+      const fileBuffer = req.file.buffer || fs.readFileSync(req.file.path);
+
       const { data, error } = await supabase
         .storage
         .from('aerialdeck-files')
-        .upload(storagePath, req.file.buffer, {
+        .upload(storagePath, fileBuffer, {
           contentType: req.file.mimetype,
           upsert: true
         });
@@ -637,55 +746,77 @@ app.post('/api/flight-plans/:planId/evidence/:category', requireAuth, upload.sin
         return res.status(500).json({ error: 'Failed to upload file to storage' });
       }
 
-      // Get public URL
       const { data: urlData } = supabase.storage.from('aerialdeck-files').getPublicUrl(storagePath);
       filePath = urlData.publicUrl;
-    } catch (err) {
-      console.error('Storage upload error:', err);
-      return res.status(500).json({ error: 'Failed to upload file' });
+    } else {
+      // Fallback to local filesystem path
+      filePath = `/uploads/evidence/${planId}/${category}/${req.file.filename}`;
     }
-  } else {
-    // Local filesystem path
-    filePath = `/uploads/evidence/${planId}/${category}/${req.file.filename}`;
+
+    const fileRecord = {
+      id: timestamp,
+      filename: req.file.filename || `${timestamp}_${safeFilename}`,
+      originalName: req.file.originalname,
+      uploadDate: new Date().toISOString().split('T')[0],
+      fileType: req.file.mimetype.startsWith('image/') ? 'image' : 'pdf',
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+      path: filePath
+    };
+
+    evidence[category].push(fileRecord);
+    await saveEvidence(planId, evidence);
+    res.json(fileRecord);
+  } catch (err) {
+    console.error('Error uploading evidence file:', err);
+    res.status(500).json({ error: 'Failed to upload file' });
   }
-
-  const fileRecord = {
-    id: timestamp,
-    filename: req.file.filename || safeFilename,
-    originalName: req.file.originalname,
-    uploadDate: new Date().toISOString().split('T')[0],
-    fileType: req.file.mimetype.startsWith('image/') ? 'image' : 'pdf',
-    mimeType: req.file.mimetype,
-    size: req.file.size,
-    path: filePath
-  };
-
-  localData.flightPlanEvidence[planId][category].push(fileRecord);
-  res.json(fileRecord);
 });
 
-app.delete('/api/flight-plans/:planId/evidence/:category/:fileId', requireAuth, (req, res) => {
+app.delete('/api/flight-plans/:planId/evidence/:category/:fileId', requireAuth, async (req, res) => {
   const { planId, category, fileId } = req.params;
 
-  if (!localData.flightPlanEvidence[planId]?.[category]) {
-    return res.status(404).json({ error: 'Evidence not found' });
+  try {
+    const evidence = await getEvidence(planId);
+
+    if (!evidence[category]) {
+      return res.status(404).json({ error: 'Evidence not found' });
+    }
+
+    const files = evidence[category];
+    const fileIndex = files.findIndex(f => f.id === parseInt(fileId));
+
+    if (fileIndex === -1) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    const file = files[fileIndex];
+
+    // Try to delete from Supabase Storage if it's a Supabase URL
+    if (file.path && file.path.includes('supabase')) {
+      try {
+        const storagePath = file.path.split('/aerialdeck-files/')[1];
+        if (storagePath) {
+          await supabase.storage.from('aerialdeck-files').remove([storagePath]);
+        }
+      } catch (storageErr) {
+        console.error('Error deleting from storage:', storageErr);
+      }
+    } else {
+      // Try to delete from local filesystem
+      const localPath = path.join(__dirname, 'public', file.path);
+      if (fs.existsSync(localPath)) {
+        fs.unlinkSync(localPath);
+      }
+    }
+
+    files.splice(fileIndex, 1);
+    await saveEvidence(planId, evidence);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting evidence file:', err);
+    res.status(500).json({ error: 'Failed to delete file' });
   }
-
-  const files = localData.flightPlanEvidence[planId][category];
-  const fileIndex = files.findIndex(f => f.id === parseInt(fileId));
-
-  if (fileIndex === -1) {
-    return res.status(404).json({ error: 'File not found' });
-  }
-
-  const file = files[fileIndex];
-  const filePath = path.join(__dirname, 'public', file.path);
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-  }
-
-  files.splice(fileIndex, 1);
-  res.json({ success: true });
 });
 
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
