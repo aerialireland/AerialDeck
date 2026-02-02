@@ -639,23 +639,28 @@ app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Start server
-app.listen(PORT, async () => {
-  // Test Supabase connection
-  try {
-    const { count, error } = await supabase.from('flight_logs').select('*', { count: 'exact', head: true });
-    if (error) throw error;
-    console.log(`
+// Export for Vercel serverless
+module.exports = app;
+
+// Start server only when running locally (not on Vercel)
+if (process.env.VERCEL !== '1' && require.main === module) {
+  app.listen(PORT, async () => {
+    // Test Supabase connection
+    try {
+      const { count, error } = await supabase.from('flight_logs').select('*', { count: 'exact', head: true });
+      if (error) throw error;
+      console.log(`
   AerialDeck - IAA-Compliant Flight Records Management
   Database: Supabase ✓ (${count} flight logs)
   Server running at: http://localhost:${PORT}
-    `);
-  } catch (err) {
-    console.log(`
+      `);
+    } catch (err) {
+      console.log(`
   AerialDeck - IAA-Compliant Flight Records Management
   Database: Supabase (offline - deploy to enable)
   Note: Supabase requires network access. Deploy to Vercel/Railway for full functionality.
   Server running at: http://localhost:${PORT}
-    `);
-  }
-});
+      `);
+    }
+  });
+}
