@@ -2228,6 +2228,7 @@
         const res = await safeFetch(`/api/flight-plans/${planId}/evidence`);
         currentEvidence = { ...defaultEvidence, ...res };
         renderEvidence();
+        updateDetailHeader(); // Update header with evidence data (lat/long, max altitude)
       } catch (err) {
         console.error('Error loading evidence:', err);
         currentEvidence = { ...defaultEvidence };
