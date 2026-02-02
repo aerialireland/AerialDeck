@@ -201,14 +201,16 @@
     @keyframes shimmer { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
 
     /* Mini compliance progress bar for flight plan rows */
-    .compliance-mini { display: flex; align-items: center; gap: 0.5rem; }
-    .compliance-mini-bar { width: 60px; height: 8px; background: var(--border-light); border-radius: 4px; overflow: hidden; }
-    .compliance-mini-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
+    .compliance-mini { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; }
+    .compliance-mini-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+    .compliance-mini-row { display: flex; align-items: center; gap: 0.5rem; }
+    .compliance-mini-bar { width: 120px; height: 16px; background: var(--border-light); border-radius: 8px; overflow: hidden; }
+    .compliance-mini-fill { height: 100%; border-radius: 8px; transition: width 0.3s ease; }
     .compliance-mini-fill.red { background: #ef4444; }
     .compliance-mini-fill.orange { background: #f97316; }
     .compliance-mini-fill.green { background: #4a8550; }
     .compliance-mini-fill.gold { background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b); background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite; }
-    .compliance-mini-percent { font-size: 0.75rem; font-weight: 600; min-width: 36px; text-align: right; }
+    .compliance-mini-percent { font-size: 0.85rem; font-weight: 700; min-width: 40px; text-align: right; }
     .compliance-mini-percent.red { color: #dc2626; }
     .compliance-mini-percent.orange { color: #ea580c; }
     .compliance-mini-percent.green { color: #4a8550; }
@@ -1750,6 +1752,7 @@
         });
 
         updateAuditBuster();
+        renderFlightPlans(); // Re-render flight plans with correct compliance data
       } catch (err) {
         console.error('Error loading evidence for audit:', err);
       }
@@ -1807,10 +1810,13 @@
 
       return `
         <div class="compliance-mini">
-          <div class="compliance-mini-bar">
-            <div class="compliance-mini-fill ${colorClass}" style="width:${pct}%;"></div>
+          <span class="compliance-mini-label">Compliance Score</span>
+          <div class="compliance-mini-row">
+            <div class="compliance-mini-bar">
+              <div class="compliance-mini-fill ${colorClass}" style="width:${pct}%;"></div>
+            </div>
+            <span class="compliance-mini-percent ${colorClass}">${pct}%</span>
           </div>
-          <span class="compliance-mini-percent ${colorClass}">${pct}%</span>
         </div>
       `;
     }
