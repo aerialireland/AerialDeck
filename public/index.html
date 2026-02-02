@@ -199,6 +199,21 @@
     .audit-progress-fill.green { background: linear-gradient(90deg, #4a8550, #6ba671); }
     .audit-progress-fill.gold { background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b); background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite; }
     @keyframes shimmer { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+
+    /* Mini compliance progress bar for flight plan rows */
+    .compliance-mini { display: flex; align-items: center; gap: 0.5rem; }
+    .compliance-mini-bar { width: 60px; height: 8px; background: var(--border-light); border-radius: 4px; overflow: hidden; }
+    .compliance-mini-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
+    .compliance-mini-fill.red { background: #ef4444; }
+    .compliance-mini-fill.orange { background: #f97316; }
+    .compliance-mini-fill.green { background: #4a8550; }
+    .compliance-mini-fill.gold { background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b); background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite; }
+    .compliance-mini-percent { font-size: 0.75rem; font-weight: 600; min-width: 36px; text-align: right; }
+    .compliance-mini-percent.red { color: #dc2626; }
+    .compliance-mini-percent.orange { color: #ea580c; }
+    .compliance-mini-percent.green { color: #4a8550; }
+    .compliance-mini-percent.gold { color: #b8860b; }
+
     .card-modes { grid-column: span 2; }
     .card-avgtime { grid-column: span 2; }
     .card-batteries { grid-column: span 5; }
@@ -1781,6 +1796,25 @@
       return { completed, total, percentage, missing, isFullyCompliant: completed === total };
     }
 
+    // Generate mini compliance progress bar HTML
+    function getMiniComplianceBar(planId) {
+      const compliance = calculatePlanCompliance(planId);
+      const pct = compliance.percentage;
+      let colorClass = 'red';
+      if (pct === 100) colorClass = 'gold';
+      else if (pct >= 66) colorClass = 'green';
+      else if (pct >= 33) colorClass = 'orange';
+
+      return `
+        <div class="compliance-mini">
+          <div class="compliance-mini-bar">
+            <div class="compliance-mini-fill ${colorClass}" style="width:${pct}%;"></div>
+          </div>
+          <span class="compliance-mini-percent ${colorClass}">${pct}%</span>
+        </div>
+      `;
+    }
+
     // Update the Audit Buster display
     function updateAuditBuster() {
       let totalCompleted = 0;
@@ -1875,13 +1909,11 @@
         : filtered.map(plan => {
           const logsCount = plan.flight_count || flightLogs.filter(l => l.flight_plan_id === plan.id).length;
           const totalTime = plan.total_air_time || 0;
-          const status = plan.status || 'Completed';
-          const statusClass = getStatusClass(status);
           return `
             <div class="flight-plan-card" data-id="${plan.id}">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;">
                 <h3>${esc(plan.name)}</h3>
-                <span class="status-badge ${statusClass}">${esc(status)}</span>
+                ${getMiniComplianceBar(plan.id)}
               </div>
               <div class="flight-plan-meta">
                 <span>📅 ${formatDate(plan.date)}</span>
@@ -2014,8 +2046,6 @@
       if (!plan) plan = flightPlans.find(p => p.id === currentPlanId);
       if (!planLogs) planLogs = flightLogs.filter(l => l.flight_plan_id === currentPlanId);
 
-      const status = plan?.status || 'Completed';
-      const statusClass = getStatusClass(status);
       const totalMinutes = planLogs.reduce((s, l) => s + (parseFloat(l.air_time_minutes) || 0), 0);
 
       // Get location from evidence flightGeographyData if available
@@ -2034,7 +2064,7 @@
       document.getElementById('detailHeader').innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
           <h2>${esc(plan?.name || 'Flight Plan')}</h2>
-          <span class="status-badge ${statusClass}">${esc(status)}</span>
+          ${getMiniComplianceBar(plan?.id || currentPlanId)}
         </div>
         <div class="detail-info">
           <div class="detail-info-item"><label>Date</label><span>${formatDate(plan?.date)}</span></div>
