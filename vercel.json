@@ -19,10 +19,5 @@
       "src": "/(.*)",
       "dest": "/server.js"
     }
-  ],
-  "env": {
-    "SUPABASE_KEY": "@supabase-key",
-    "DASHBOARD_PASSWORD": "@dashboard-password",
-    "SESSION_SECRET": "@session-secret"
-  }
+  ]
 }
