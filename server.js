@@ -431,10 +431,11 @@ app.get('/api/batteries', requireAuth, async (req, res) => {
     if (logsError) throw logsError;
 
     const batteriesWithStats = batteries.map(battery => {
-      const batteryLogs = logs.filter(l => l.battery && l.battery.includes(battery.serial_number));
+      const batteryLogs = logs.filter(l => l.battery && l.battery.includes(battery.serial));
       return {
         ...battery,
-        cycles: batteryLogs.length,
+        serial_number: battery.serial, // Map to expected field name
+        cycles: battery.cycles || batteryLogs.length,
         total_hours: (batteryLogs.reduce((sum, l) => sum + (l.air_time_minutes || 0), 0) / 60).toFixed(1)
       };
     });
