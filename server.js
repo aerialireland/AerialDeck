@@ -595,7 +595,7 @@ app.post('/api/flight-plans/:planId/evidence/airspaceZones', requireAuth, (req, 
   res.json({ zones: localData.flightPlanEvidence[planId].airspaceZones });
 });
 
-app.post('/api/flight-plans/:planId/evidence/:category', requireAuth, upload.single('file'), (req, res) => {
+app.post('/api/flight-plans/:planId/evidence/:category', requireAuth, upload.single('file'), async (req, res) => {
   const { planId, category } = req.params;
   const validCategories = ['flightGeography', 'emergencyResponsePlan', 'weather', 'nearbyEvents', 'notams', 'uf101Permission', 'uf101Application'];
 
@@ -616,15 +616,48 @@ app.post('/api/flight-plans/:planId/evidence/:category', requireAuth, upload.sin
     localData.flightPlanEvidence[planId][category] = [];
   }
 
+  let filePath;
+  const timestamp = Date.now();
+  const safeFilename = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+
+  // On Vercel, upload to Supabase Storage
+  if (isVercel && req.file.buffer) {
+    try {
+      const storagePath = `evidence/${planId}/${category}/${timestamp}_${safeFilename}`;
+      const { data, error } = await supabase
+        .storage
+        .from('aerialdeck-files')
+        .upload(storagePath, req.file.buffer, {
+          contentType: req.file.mimetype,
+          upsert: true
+        });
+
+      if (error) {
+        console.error('Supabase storage upload error:', error);
+        return res.status(500).json({ error: 'Failed to upload file to storage' });
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage.from('aerialdeck-files').getPublicUrl(storagePath);
+      filePath = urlData.publicUrl;
+    } catch (err) {
+      console.error('Storage upload error:', err);
+      return res.status(500).json({ error: 'Failed to upload file' });
+    }
+  } else {
+    // Local filesystem path
+    filePath = `/uploads/evidence/${planId}/${category}/${req.file.filename}`;
+  }
+
   const fileRecord = {
-    id: Date.now(),
-    filename: req.file.filename,
+    id: timestamp,
+    filename: req.file.filename || safeFilename,
     originalName: req.file.originalname,
     uploadDate: new Date().toISOString().split('T')[0],
     fileType: req.file.mimetype.startsWith('image/') ? 'image' : 'pdf',
     mimeType: req.file.mimetype,
     size: req.file.size,
-    path: `/uploads/evidence/${planId}/${category}/${req.file.filename}`
+    path: filePath
   };
 
   localData.flightPlanEvidence[planId][category].push(fileRecord);
