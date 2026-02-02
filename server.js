@@ -13,19 +13,35 @@ const supabase = require('./database/supabase.js');
 const localData = require('./database/local-data.js');
 
 // ============ FILE UPLOAD SETUP ============
-const uploadsDir = path.join(__dirname, 'public', 'uploads', 'evidence');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+// Vercel has read-only filesystem - use /tmp or memory storage
+const isVercel = process.env.VERCEL === '1';
+let uploadsDir = '/tmp/uploads/evidence';
+
+// Only try to create dirs if not on Vercel (or use /tmp on Vercel)
+if (!isVercel) {
+  uploadsDir = path.join(__dirname, 'public', 'uploads', 'evidence');
+}
+try {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+} catch (err) {
+  console.log('Note: Could not create uploads dir (expected on Vercel):', err.message);
 }
 
 // Configure multer for evidence file uploads
-const storage = multer.diskStorage({
+// On Vercel, use memory storage since filesystem is ephemeral
+const storage = isVercel ? multer.memoryStorage() : multer.diskStorage({
   destination: (req, file, cb) => {
     const planId = req.params.planId;
     const category = req.params.category;
     const dir = path.join(uploadsDir, planId, category);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    try {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+    } catch (err) {
+      console.log('Could not create upload dir:', err.message);
     }
     cb(null, dir);
   },
