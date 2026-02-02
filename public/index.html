@@ -188,7 +188,7 @@
     .card-drones { grid-column: span 3; grid-row: span 2; }
     .card-map { grid-column: span 6; grid-row: span 2; padding: 0; overflow: hidden; }
     .card-pilothours { grid-column: span 3; }
-    .card-audit { grid-column: span 2; }
+    .card-audit { grid-column: span 3; grid-row: span 2; }
     .audit-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
     .audit-header .percent { font-size: 1.5rem; font-weight: 700; color: var(--accent-dark); }
     .audit-progress-bar { height: 8px; background: var(--border-light); border-radius: 4px; overflow: hidden; margin-bottom: 0.75rem; }
@@ -1615,6 +1615,20 @@
             `).join('')}
           </div>
         </div>
+        <div class="bento-card card-audit" id="auditBusterCard">
+          <h3>Audit Buster</h3>
+          <div class="audit-header">
+            <span>Compliance</span>
+            <span class="percent" id="auditPercent">--%</span>
+          </div>
+          <div class="audit-progress-bar">
+            <div class="audit-progress-fill" id="auditProgressFill" style="width:0%;"></div>
+          </div>
+          <div class="audit-stats">
+            <span class="audit-compliant"><span id="auditCompliantCount">-</span> complete</span>
+            <span class="audit-incomplete"><span id="auditIncompleteCount">-</span> incomplete</span>
+          </div>
+        </div>
         <div class="bento-card card-map">
           <div id="flightMap"></div>
         </div>
@@ -1636,20 +1650,6 @@
                 </div>
               `;
             }).join('')}
-          </div>
-        </div>
-        <div class="bento-card card-audit" id="auditBusterCard">
-          <h3>Audit Buster</h3>
-          <div class="audit-header">
-            <span>Compliance</span>
-            <span class="percent" id="auditPercent">--%</span>
-          </div>
-          <div class="audit-progress-bar">
-            <div class="audit-progress-fill" id="auditProgressFill" style="width:0%;"></div>
-          </div>
-          <div class="audit-stats">
-            <span class="audit-compliant"><span id="auditCompliantCount">-</span> complete</span>
-            <span class="audit-incomplete"><span id="auditIncompleteCount">-</span> incomplete</span>
           </div>
         </div>
         <div class="bento-card card-modes">
