@@ -1790,7 +1790,7 @@
     // Calculate compliance for a single flight plan
     function calculatePlanCompliance(planId) {
       const evidence = allPlansEvidence[planId] || {};
-      const planLogs = flightLogs.filter(l => l.flight_plan_id === planId);
+      const planLogs = flightLogs.filter(l => l.flight_plan_id == planId);
 
       // 11 compliance items
       const items = {
@@ -1898,7 +1898,7 @@
       // Add markers from flight plans with coordinates
       flightPlans.forEach(plan => {
         if (plan.latitude && plan.longitude) {
-          const flightCount = plan.flight_count || flightLogs.filter(l => l.flight_plan_id === plan.id).length;
+          const flightCount = plan.flight_count || flightLogs.filter(l => l.flight_plan_id == plan.id).length;
           const marker = L.circleMarker([plan.latitude, plan.longitude], {
             radius: 8 + Math.min(flightCount, 10),
             fillColor: '#6ba671',
@@ -1942,7 +1942,7 @@
       document.getElementById('flightPlansGrid').innerHTML = filtered.length === 0
         ? '<div class="no-data">No flight plans found</div>'
         : filtered.map(plan => {
-          const logsCount = plan.flight_count || flightLogs.filter(l => l.flight_plan_id === plan.id).length;
+          const logsCount = plan.flight_count || flightLogs.filter(l => l.flight_plan_id == plan.id).length;
           const totalTime = plan.total_air_time || 0;
           return `
             <div class="flight-plan-card" data-id="${plan.id}">
@@ -2057,8 +2057,9 @@
 
 
     function showPlanDetail(planId) {
-      const plan = flightPlans.find(p => p.id === planId);
-      const planLogs = flightLogs.filter(l => l.flight_plan_id === planId);
+      // Use == for type coercion since IDs from Supabase may be strings
+      const plan = flightPlans.find(p => p.id == planId);
+      const planLogs = flightLogs.filter(l => l.flight_plan_id == planId);
       homeView.style.display = 'none';
       detailView.classList.add('active');
       currentPlanId = planId; // Set current plan for evidence
@@ -2087,8 +2088,8 @@
 
     // Helper function to update detail header with evidence data
     function updateDetailHeader(plan, planLogs) {
-      if (!plan) plan = flightPlans.find(p => p.id === currentPlanId);
-      if (!planLogs) planLogs = flightLogs.filter(l => l.flight_plan_id === currentPlanId);
+      if (!plan) plan = flightPlans.find(p => p.id == currentPlanId);
+      if (!planLogs) planLogs = flightLogs.filter(l => l.flight_plan_id == currentPlanId);
 
       const totalMinutes = planLogs.reduce((s, l) => s + (parseFloat(l.air_time_minutes) || 0), 0);
 
