@@ -773,6 +773,31 @@ app.post('/api/flight-plans/:planId/evidence/:category', requireAuth, upload.sin
   }
 });
 
+// Save file metadata only (file already uploaded directly to Supabase from browser)
+app.post('/api/flight-plans/:planId/evidence/:category/metadata', requireAuth, async (req, res) => {
+  const { planId, category } = req.params;
+  const validCategories = ['flightGeography', 'emergencyResponsePlan', 'weather', 'nearbyEvents', 'notams', 'uf101Permission', 'uf101Application'];
+
+  if (!validCategories.includes(category)) {
+    return res.status(400).json({ error: 'Invalid evidence category' });
+  }
+
+  try {
+    const evidence = await getEvidence(planId);
+    if (!evidence[category]) {
+      evidence[category] = [];
+    }
+
+    const fileRecord = req.body;
+    evidence[category].push(fileRecord);
+    await saveEvidence(planId, evidence);
+    res.json(fileRecord);
+  } catch (err) {
+    console.error('Error saving evidence metadata:', err);
+    res.status(500).json({ error: 'Failed to save metadata' });
+  }
+});
+
 app.delete('/api/flight-plans/:planId/evidence/:category/:fileId', requireAuth, async (req, res) => {
   const { planId, category, fileId } = req.params;
 

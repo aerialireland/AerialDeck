@@ -13,6 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
       --bg-primary: #ffffff;
@@ -1409,6 +1410,11 @@
   </div>
 
   <script>
+    // Supabase client for direct uploads (bypasses Vercel size limits)
+    const SUPABASE_URL = 'https://xvevvssehmtbpkcztzmj.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh2ZXZ2c3NlaG10YnBrY3p0em1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwNDAxMzMsImV4cCI6MjA4NTYxNjEzM30._ed3mYbiO_9XkxFus6-c5Io_Tp3WXkc_OzvE8qWIa1c';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
     let stats = {}, flightPlans = [], flightLogs = [], drones = [], batteryLogs = [], map = null, markers = [];
 
     const loginScreen = document.getElementById('loginScreen');
@@ -2649,28 +2655,59 @@
       if (!files.length || !currentPlanId) return;
 
       for (const file of files) {
-        const formData = new FormData();
-        formData.append('file', file);
-
         try {
-          const res = await fetch(`/api/flight-plans/${currentPlanId}/evidence/${category}`, {
+          // Upload directly to Supabase Storage (bypasses Vercel size limits)
+          const timestamp = Date.now();
+          const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const storagePath = `evidence/${currentPlanId}/${category}/${timestamp}_${safeFilename}`;
+
+          const { data, error } = await supabaseClient.storage
+            .from('aerialdeck-files')
+            .upload(storagePath, file, {
+              contentType: file.type,
+              upsert: true
+            });
+
+          if (error) {
+            console.error('Supabase upload error:', error);
+            alert('Upload failed: ' + error.message);
+            continue;
+          }
+
+          // Get public URL
+          const { data: urlData } = supabaseClient.storage
+            .from('aerialdeck-files')
+            .getPublicUrl(storagePath);
+
+          // Save metadata to server
+          const fileRecord = {
+            id: timestamp,
+            filename: `${timestamp}_${safeFilename}`,
+            originalName: file.name,
+            uploadDate: new Date().toISOString().split('T')[0],
+            fileType: file.type.startsWith('image/') ? 'image' : 'pdf',
+            mimeType: file.type,
+            size: file.size,
+            path: urlData.publicUrl
+          };
+
+          const res = await fetch(`/api/flight-plans/${currentPlanId}/evidence/${category}/metadata`, {
             method: 'POST',
-            body: formData
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fileRecord)
           });
 
           if (res.ok) {
-            const newFile = await res.json();
             if (!currentEvidence[category]) {
               currentEvidence[category] = [];
             }
-            currentEvidence[category].push(newFile);
+            currentEvidence[category].push(fileRecord);
           } else {
-            const err = await res.json();
-            alert('Upload failed: ' + (err.error || 'Unknown error'));
+            alert('Failed to save file metadata');
           }
         } catch (err) {
           console.error('Error uploading file:', err);
-          alert('Error uploading file');
+          alert('Error uploading file: ' + err.message);
         }
       }
 
