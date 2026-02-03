@@ -275,6 +275,12 @@
       justify-content: center;
       font-size: 1.25rem;
     }
+    .drone-thumb {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      object-fit: cover;
+    }
     .pilot-info, .drone-info { flex: 1; }
     .pilot-info .name, .drone-info .name { font-weight: 500; color: var(--text-primary); font-size: 0.9rem; }
     .pilot-info .role, .drone-info .model { font-size: 0.75rem; color: var(--text-muted); }
@@ -1629,7 +1635,9 @@
           <div class="drones-list">
             ${(stats.drones || []).map(d => `
               <div class="drone-item">
-                <div class="drone-icon">🚁</div>
+                ${d.image_url
+                  ? `<img class="drone-thumb" src="${esc(d.image_url)}" alt="${esc(d.name)}">`
+                  : `<div class="drone-icon">🚁</div>`}
                 <div class="drone-info">
                   <div class="name">${esc(d.name)}</div>
                   <div class="model">${esc(d.model)}</div>
