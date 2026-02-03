@@ -2872,14 +2872,14 @@
         };
 
         // Helper to add section header
-        const addSectionHeader = (title, icon = '') => {
+        const addSectionHeader = (title) => {
           checkPageBreak(20);
           doc.setFillColor(107, 166, 113); // accent color
           doc.rect(margin, yPos, pageWidth - 2 * margin, 8, 'F');
           doc.setTextColor(255, 255, 255);
           doc.setFontSize(11);
           doc.setFont('helvetica', 'bold');
-          doc.text(`${icon} ${title}`, margin + 3, yPos + 5.5);
+          doc.text(title, margin + 3, yPos + 5.5);
           doc.setTextColor(0, 0, 0);
           doc.setFont('helvetica', 'normal');
           yPos += 12;
@@ -2971,7 +2971,7 @@
         const compliance = calculatePlanCompliance(currentPlanId);
 
         // Basic Info Section
-        addSectionHeader('BASIC INFORMATION', '📋');
+        addSectionHeader('BASIC INFORMATION');
         addRow('Flight Plan Name', plan.name);
         addRow('Date', formatDate(plan.date));
         // Build location string from available data
@@ -2990,7 +2990,7 @@
         yPos += 5;
 
         // Flight Parameters Section
-        addSectionHeader('FLIGHT PARAMETERS', '🛫');
+        addSectionHeader('FLIGHT PARAMETERS');
         addRow('Latitude', geo.latitude || '-');
         addRow('Longitude', geo.longitude || '-');
         addRow('Max Height (AGL)', geo.maxHeight ? geo.maxHeight + 'm' : '-');
@@ -3005,7 +3005,7 @@
 
         // Crew Assignment Section
         const planning = evidence.planning || {};
-        addSectionHeader('CREW ASSIGNMENT', '👥');
+        addSectionHeader('CREW ASSIGNMENT');
         addRow('Pilot in Command', planning.pilotInCommand || '-');
         addRow('Assistant', planning.assistant || '-');
         addRow('FTS Operator', planning.ftsOperator || '-');
@@ -3014,7 +3014,7 @@
 
         // Airspace Zones Section
         const zones = evidence.airspaceZones || [];
-        addSectionHeader('AIRSPACE ZONES', '🗺️');
+        addSectionHeader('AIRSPACE ZONES');
         if (zones.length > 0) {
           zones.forEach((zone, i) => {
             checkPageBreak(8);
@@ -3032,20 +3032,19 @@
         // Flight Logs Section
         doc.addPage();
         yPos = margin;
-        addSectionHeader('FLIGHT LOGS', '📝');
+        addSectionHeader('FLIGHT LOGS');
         if (planLogs.length > 0) {
           const logData = planLogs.map(log => [
             formatDate(log.date_time_utc),
             log.drone || '-',
             log.pic || '-',
             (parseFloat(log.air_time_minutes) || 0).toFixed(1) + 'm',
-            log.max_altitude ? log.max_altitude + 'm' : '-',
             log.fts_activation === 1 ? 'Yes' : 'No'
           ]);
 
           doc.autoTable({
             startY: yPos,
-            head: [['Date', 'Drone', 'Pilot', 'Duration', 'Max Alt', 'FTS']],
+            head: [['Date', 'Drone', 'Pilot', 'Duration', 'FTS']],
             body: logData,
             margin: { left: margin, right: margin },
             styles: { fontSize: 9, cellPadding: 2 },
@@ -3075,7 +3074,7 @@
 
           doc.addPage();
           yPos = margin;
-          addSectionHeader(cat.title.toUpperCase(), '📎');
+          addSectionHeader(cat.title.toUpperCase());
 
           for (const file of files) {
             const filePath = file.path || file.url || file;
