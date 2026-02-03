@@ -1564,7 +1564,8 @@
         })),
         drones: drones.map(d => ({
           name: d.name,
-          model: d.model || d.type || 'Drone'
+          model: d.model || d.type || 'Drone',
+          image_url: d.image_url
         })),
         popularGeozones: getPopularLocations(flightPlans)
       };
