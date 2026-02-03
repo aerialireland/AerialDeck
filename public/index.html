@@ -2384,12 +2384,12 @@
     // File upload categories (in display order)
     const fileCategories = [
       { key: 'flightGeography', title: 'Flight Geography Map', subtitle: 'DroneDeck map screenshot', accept: 'image/*', isLargeCard: true },
-      { key: 'emergencyResponsePlan', title: 'Emergency Response Plan', subtitle: 'ERP image for this operation', accept: 'image/*' },
-      { key: 'weather', title: 'Weather', subtitle: 'Weather conditions screenshot', accept: 'image/*' },
-      { key: 'nearbyEvents', title: 'Nearby Events', subtitle: 'Local events check', accept: 'image/*' },
+      { key: 'emergencyResponsePlan', title: 'Emergency Response Plan', subtitle: 'ERP document or image', accept: '.pdf,image/*' },
+      { key: 'weather', title: 'Weather', subtitle: 'Weather conditions', accept: '.pdf,image/*' },
+      { key: 'nearbyEvents', title: 'Nearby Events', subtitle: 'Local events check', accept: '.pdf,image/*' },
       { key: 'notams', title: 'NOTAMs / PIB', subtitle: 'Pre-flight Information Bulletin', accept: '.pdf,image/*' },
-      { key: 'uf101Permission', title: 'U.F.101 Permission', subtitle: 'IAA approval confirmation', accept: 'image/*' },
-      { key: 'uf101Application', title: 'U.F.101 Application', subtitle: 'Application form submitted to IAA', accept: '.pdf' }
+      { key: 'uf101Permission', title: 'U.F.101 Permission', subtitle: 'IAA approval confirmation', accept: '.pdf,image/*' },
+      { key: 'uf101Application', title: 'U.F.101 Application', subtitle: 'Application form submitted to IAA', accept: '.pdf,image/*' }
     ];
 
     const defaultEvidence = {
