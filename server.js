@@ -743,7 +743,7 @@ app.post('/api/flight-plans/:planId/evidence/:category', requireAuth, upload.sin
 
       if (error) {
         console.error('Supabase storage upload error:', error);
-        return res.status(500).json({ error: 'Failed to upload file to storage' });
+        return res.status(500).json({ error: 'Storage error: ' + error.message });
       }
 
       const { data: urlData } = supabase.storage.from('aerialdeck-files').getPublicUrl(storagePath);
@@ -769,7 +769,7 @@ app.post('/api/flight-plans/:planId/evidence/:category', requireAuth, upload.sin
     res.json(fileRecord);
   } catch (err) {
     console.error('Error uploading evidence file:', err);
-    res.status(500).json({ error: 'Failed to upload file' });
+    res.status(500).json({ error: 'Upload error: ' + err.message });
   }
 });
 
