@@ -1978,7 +1978,7 @@
           const mode = log.flight_mode === 'N' ? 'Normal' : log.flight_mode === 'C' ? 'Cine' : log.flight_mode === 'S' ? 'Sports' : log.flight_mode || '';
           const isFTS = log.fts_activation === 1;
           return `
-            <div class="flight-plan-card ${isFTS ? 'fts-highlight' : ''}">
+            <div class="flight-plan-card flight-log-card ${isFTS ? 'fts-highlight' : ''}" data-plan-id="${log.flight_plan_id || ''}">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;">
                 <h3>${esc(log.flight_plan_name || 'Flight Log')}${isFTS ? '<span class="fts-badge">FTS</span>' : ''}</h3>
                 <span style="color:var(--accent);font-size:0.8rem;font-weight:500;">${airTimeMin.toFixed(1)}m</span>
@@ -1994,6 +1994,15 @@
             </div>
           `;
         }).join('');
+      // Add click handlers to navigate to the flight plan
+      document.querySelectorAll('#allFlightLogsGrid .flight-log-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const planId = parseInt(card.dataset.planId);
+          if (planId) {
+            showPlanDetail(planId);
+          }
+        });
+      });
     }
 
     function renderDrones() {
