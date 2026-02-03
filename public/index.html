@@ -971,7 +971,10 @@
 
       <!-- Detail View -->
       <div class="detail-view" id="detailView">
-        <a class="back-btn" id="backBtn">← Back</a>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <a class="back-btn" id="backBtn" style="margin-bottom:0;">← Back</a>
+          <button onclick="generateFlightPlanPDF()" class="back-btn" style="margin-bottom:0;background:none;border:none;font-size:inherit;font-family:inherit;">Download PDF →</button>
+        </div>
         <div class="detail-header" id="detailHeader"></div>
         <div class="flight-logs-section">
           <div class="flight-logs-header"><h3>Flight Logs</h3></div>
@@ -2118,12 +2121,7 @@
       document.getElementById('detailHeader').innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
           <h2>${esc(plan?.name || 'Flight Plan')}</h2>
-          <div style="display:flex;align-items:center;gap:1rem;">
-            ${getMiniComplianceBar(plan?.id || currentPlanId)}
-            <button onclick="generateFlightPlanPDF()" class="btn-primary" style="padding:0.5rem 1rem;font-size:0.85rem;">
-              📄 Download PDF
-            </button>
-          </div>
+          ${getMiniComplianceBar(plan?.id || currentPlanId)}
         </div>
         <div class="detail-info">
           <div class="detail-info-item"><label>Date</label><span>${formatDate(plan?.date)}</span></div>
