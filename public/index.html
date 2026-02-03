@@ -1959,7 +1959,7 @@
             </div>
           `;
         }).join('');
-      document.querySelectorAll('.flight-plan-card').forEach(card => {
+      document.querySelectorAll('#flightPlansGrid .flight-plan-card').forEach(card => {
         card.addEventListener('click', () => showPlanDetail(parseInt(card.dataset.id)));
       });
     }
