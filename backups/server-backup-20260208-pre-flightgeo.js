@@ -694,20 +694,6 @@ app.post('/api/flight-plans/:planId/evidence/flightGeographyData', requireAuth, 
   }
 });
 
-// Flight Geography Map data (KML coordinates, buffers, etc.)
-app.post('/api/flight-plans/:planId/evidence/flightGeographyMap', requireAuth, async (req, res) => {
-  try {
-    const { planId } = req.params;
-    const evidence = await getEvidence(planId);
-    evidence.flightGeographyMap = req.body;
-    await saveEvidence(planId, evidence);
-    res.json(evidence.flightGeographyMap);
-  } catch (err) {
-    console.error('Error saving flight geography map data:', err);
-    res.status(500).json({ error: 'Failed to save flight geography map data' });
-  }
-});
-
 app.post('/api/flight-plans/:planId/evidence/airspaceZones', requireAuth, async (req, res) => {
   try {
     const { planId } = req.params;
