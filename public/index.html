@@ -1238,9 +1238,9 @@
               </div>
 
               <div class="flight-geo-legend">
-                <div class="legend-item"><div class="legend-color legend-grb"></div> Ground Risk Buffer (inside)</div>
+                <div class="legend-item"><div class="legend-color legend-cv"></div> Contingency Volume (inside)</div>
                 <div class="legend-item"><div class="legend-color legend-fg"></div> Flight Geography (KML)</div>
-                <div class="legend-item"><div class="legend-color legend-cv"></div> Contingency Volume (outside)</div>
+                <div class="legend-item"><div class="legend-color legend-grb"></div> Ground Risk Buffer (outside)</div>
                 <div class="legend-item"><div class="legend-color legend-adj"></div> 5km Adjacent Area</div>
               </div>
 
@@ -3345,9 +3345,9 @@
 
       // Draw layers from outermost to innermost
 
-      // 4. Adjacent Area (5km outside contingency volume)
-      if (contingencyM > 0) {
-        const adjacentBuffer = turf.buffer(flightGeoPoly, (contingencyM + 5000) / 1000, { units: 'kilometers' });
+      // 4. Adjacent Area (5km outside ground risk buffer)
+      if (grbM > 0) {
+        const adjacentBuffer = turf.buffer(flightGeoPoly, (grbM + 5000) / 1000, { units: 'kilometers' });
         flightGeoLayers.adjacentArea = L.geoJSON(adjacentBuffer, {
           style: {
             color: '#9E9E9E',
@@ -3359,15 +3359,15 @@
         }).addTo(flightGeoMap);
       }
 
-      // 3. Contingency Volume (outside flight geography)
-      if (contingencyM > 0) {
-        const cvBuffer = turf.buffer(flightGeoPoly, contingencyM / 1000, { units: 'kilometers' });
-        flightGeoLayers.contingencyVolume = L.geoJSON(cvBuffer, {
+      // 3. Ground Risk Buffer (OUTSIDE flight geography)
+      if (grbM > 0) {
+        const grbBuffer = turf.buffer(flightGeoPoly, grbM / 1000, { units: 'kilometers' });
+        flightGeoLayers.groundRiskBuffer = L.geoJSON(grbBuffer, {
           style: {
-            color: '#FF9800',
+            color: '#4CAF50',
             weight: 2,
-            fillColor: '#FF9800',
-            fillOpacity: 0.25
+            fillColor: '#4CAF50',
+            fillOpacity: 0.2
           }
         }).addTo(flightGeoMap);
       }
@@ -3382,16 +3382,16 @@
         }
       }).addTo(flightGeoMap);
 
-      // 1. Ground Risk Buffer (INSIDE flight geography)
-      if (grbM > 0) {
+      // 1. Contingency Volume (INSIDE flight geography)
+      if (contingencyM > 0) {
         // Negative buffer to go inside
-        const grbBuffer = turf.buffer(flightGeoPoly, -grbM / 1000, { units: 'kilometers' });
-        if (grbBuffer && grbBuffer.geometry && grbBuffer.geometry.coordinates.length > 0) {
-          flightGeoLayers.groundRiskBuffer = L.geoJSON(grbBuffer, {
+        const cvBuffer = turf.buffer(flightGeoPoly, -contingencyM / 1000, { units: 'kilometers' });
+        if (cvBuffer && cvBuffer.geometry && cvBuffer.geometry.coordinates.length > 0) {
+          flightGeoLayers.contingencyVolume = L.geoJSON(cvBuffer, {
             style: {
-              color: '#4CAF50',
+              color: '#FF9800',
               weight: 2,
-              fillColor: '#4CAF50',
+              fillColor: '#FF9800',
               fillOpacity: 0.4
             }
           }).addTo(flightGeoMap);
@@ -3401,8 +3401,8 @@
       // Fit map to show all layers
       const bounds = flightGeoLayers.adjacentArea
         ? flightGeoLayers.adjacentArea.getBounds()
-        : (flightGeoLayers.contingencyVolume
-          ? flightGeoLayers.contingencyVolume.getBounds()
+        : (flightGeoLayers.groundRiskBuffer
+          ? flightGeoLayers.groundRiskBuffer.getBounds()
           : flightGeoLayers.flightGeography.getBounds());
 
       flightGeoMap.fitBounds(bounds, { padding: [20, 20] });
