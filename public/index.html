@@ -3443,6 +3443,27 @@
       }
     }
 
+    // Max speed by mode (m/s)
+    const MODE_SPEEDS = {
+      C: 6,    // Mode C/T (Cine/Tripod)
+      N: 15,   // Mode N (Normal)
+      S: 19    // Mode S (Sports)
+    };
+
+    // Calculate center point of polygon
+    function calculateCenterPoint(coords) {
+      if (!coords || coords.length === 0) return { lat: 0, lng: 0 };
+      let sumLat = 0, sumLng = 0;
+      for (const coord of coords) {
+        sumLng += coord[0];
+        sumLat += coord[1];
+      }
+      return {
+        lat: (sumLat / coords.length).toFixed(6),
+        lng: (sumLng / coords.length).toFixed(6)
+      };
+    }
+
     // Save flight geography data to Supabase
     async function saveFlightGeography() {
       if (!currentPlanId) {
@@ -3460,6 +3481,8 @@
 
       const contingencyM = CONTINGENCY_VOLUMES[mode] || 0;
       const tableData = BUFFER_TABLES[mode]?.[height] || {};
+      const centerPoint = calculateCenterPoint(currentKMLData);
+      const maxSpeed = MODE_SPEEDS[mode] || 0;
 
       const geoData = {
         kmlCoordinates: currentKMLData,
@@ -3472,15 +3495,39 @@
         savedAt: new Date().toISOString()
       };
 
+      // Also update the Flight Parameters section
+      const flightParamsData = {
+        latitude: centerPoint.lat,
+        longitude: centerPoint.lng,
+        operationalScenario: currentEvidence.flightGeographyData?.operationalScenario || '',
+        flightObjective: 'Photo & Video',
+        flightCondition: 'Specific category',
+        maxHeight: height,
+        groundRiskBuffer: tableData.grb || 0,
+        maxFlightSpeed: maxSpeed,
+        contingencyVolume: `${contingencyM}m horizontal`,
+        adjacentArea: '5km'
+      };
+
       try {
-        const res = await fetch(`/api/flight-plans/${currentPlanId}/evidence/flightGeographyMap`, {
+        // Save flight geography map data
+        const res1 = await fetch(`/api/flight-plans/${currentPlanId}/evidence/flightGeographyMap`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(geoData)
         });
 
-        if (res.ok) {
+        // Save flight parameters data
+        const res2 = await fetch(`/api/flight-plans/${currentPlanId}/evidence/flightGeographyData`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(flightParamsData)
+        });
+
+        if (res1.ok && res2.ok) {
           currentEvidence.flightGeographyMap = geoData;
+          currentEvidence.flightGeographyData = flightParamsData;
+          renderEvidence(); // Re-render to show updated Flight Parameters
           alert('Flight geography saved successfully!');
         } else {
           throw new Error('Save failed');
