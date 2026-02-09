@@ -3478,7 +3478,7 @@
           const bounds = flightGeoLayers.groundRiskBuffer
             ? flightGeoLayers.groundRiskBuffer.getBounds()
             : flightGeoLayers.flightGeography.getBounds();
-          flightGeoMap.fitBounds(bounds, { padding: [50, 50] });
+          flightGeoMap.fitBounds(bounds, { padding: [100, 100] });
 
           // Wait for map to render and tiles to load
           await new Promise(r => setTimeout(r, 1500));
@@ -3863,11 +3863,31 @@
           try {
             const imgData = evidence.flightGeographyMap.mapScreenshot;
             const maxWidth = pageWidth - 2 * margin;
-            const maxHeight = 120; // mm
+            const maxHeight = 150; // mm max
 
-            // Add the auto-generated map screenshot
-            doc.addImage(imgData, 'JPEG', margin, yPos, maxWidth, maxHeight);
-            yPos += maxHeight + 10;
+            // Load image to get dimensions and maintain aspect ratio
+            const img = new Image();
+            await new Promise((resolve) => {
+              img.onload = resolve;
+              img.src = imgData;
+            });
+
+            const aspectRatio = img.width / img.height;
+            let imgWidth = maxWidth;
+            let imgHeight = imgWidth / aspectRatio;
+
+            // If too tall, scale by height
+            if (imgHeight > maxHeight) {
+              imgHeight = maxHeight;
+              imgWidth = imgHeight * aspectRatio;
+            }
+
+            // Center horizontally
+            const xOffset = margin + (maxWidth - imgWidth) / 2;
+
+            // Add the auto-generated map screenshot with correct aspect ratio
+            doc.addImage(imgData, 'JPEG', xOffset, yPos, imgWidth, imgHeight);
+            yPos += imgHeight + 10;
 
             // Add map details
             doc.setFontSize(9);
