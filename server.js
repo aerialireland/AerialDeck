@@ -227,31 +227,48 @@ app.put('/api/flight-plans/:id', requireAuth, async (req, res) => {
 // Delete a flight plan (and associated flight logs)
 app.delete('/api/flight-plans/:id', requireAuth, async (req, res) => {
   try {
-    const { id } = req.params;
+    const planId = parseInt(req.params.id);
+    console.log('Deleting flight plan:', planId);
+
+    if (!planId || isNaN(planId)) {
+      return res.status(400).json({ error: 'Invalid flight plan ID' });
+    }
 
     // First delete associated flight logs
-    const { error: logsError } = await supabase
+    const { data: deletedLogs, error: logsError } = await supabase
       .from('flight_logs')
       .delete()
-      .eq('flight_plan_id', id);
+      .eq('flight_plan_id', planId)
+      .select();
 
     if (logsError) {
       console.error('Error deleting flight logs:', logsError);
-      // Continue anyway - the flight plan might not have logs
+    } else {
+      console.log('Deleted flight logs:', deletedLogs?.length || 0);
     }
 
     // Then delete the flight plan
-    const { error: planError } = await supabase
+    const { data: deletedPlan, error: planError } = await supabase
       .from('flight_plans')
       .delete()
-      .eq('id', id);
+      .eq('id', planId)
+      .select();
 
-    if (planError) throw planError;
+    if (planError) {
+      console.error('Supabase delete error:', planError);
+      throw planError;
+    }
 
-    res.json({ success: true, message: 'Flight plan deleted' });
+    console.log('Deleted flight plan:', deletedPlan);
+
+    if (!deletedPlan || deletedPlan.length === 0) {
+      return res.status(404).json({ error: 'Flight plan not found or already deleted' });
+    }
+
+    res.json({ success: true, message: 'Flight plan deleted', deleted: deletedPlan[0] });
   } catch (err) {
     console.error('Error deleting flight plan:', err);
-    res.status(500).json({ error: 'Failed to delete flight plan' });
+    res.status(500).json({ error: 'Failed to delete flight plan: ' + err.message });
   }
 });
 
