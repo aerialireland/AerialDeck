@@ -25,8 +25,8 @@
     // Configure pdf.js worker
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   </script>
-  <!-- leaflet-image for map screenshot capture -->
-  <script src="https://unpkg.com/leaflet-image@0.4.0/leaflet-image.js"></script>
+  <!-- html2canvas for map screenshot capture -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     :root {
       --bg-primary: #ffffff;
@@ -3185,11 +3185,12 @@
       const mapContainer = document.getElementById('flightGeoMap');
       if (!mapContainer) return;
 
-      // Default center on Ireland
-      flightGeoMap = L.map('flightGeoMap').setView([53.5, -7.5], 7);
+      // Default center on Ireland - use preferCanvas for screenshot capability
+      flightGeoMap = L.map('flightGeoMap', { preferCanvas: true }).setView([53.5, -7.5], 7);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap'
+        attribution: '© OpenStreetMap',
+        crossOrigin: 'anonymous'
       }).addTo(flightGeoMap);
 
       // Load saved data if exists
@@ -3465,7 +3466,7 @@
 
     // Capture map screenshot (excluding Adjacent Area)
     async function captureMapScreenshot() {
-      return new Promise((resolve) => {
+      return new Promise(async (resolve) => {
         try {
           // Hide Adjacent Area layer temporarily
           const hadAdjacentArea = flightGeoLayers.adjacentArea !== null;
@@ -3479,36 +3480,38 @@
             : flightGeoLayers.flightGeography.getBounds();
           flightGeoMap.fitBounds(bounds, { padding: [30, 30] });
 
-          // Wait for tiles to load, then capture
-          setTimeout(() => {
-            leafletImage(flightGeoMap, function(err, canvas) {
-              // Re-add Adjacent Area layer
-              if (hadAdjacentArea && flightGeoLayers.adjacentArea) {
-                flightGeoLayers.adjacentArea.addTo(flightGeoMap);
-                // Fit back to full view
-                flightGeoMap.fitBounds(flightGeoLayers.adjacentArea.getBounds(), { padding: [20, 20] });
-              }
+          // Wait for map to render and tiles to load
+          await new Promise(r => setTimeout(r, 1500));
 
-              if (err) {
-                console.error('leafletImage error:', err);
-                resolve(null);
-                return;
-              }
+          // Capture using html2canvas
+          const mapContainer = document.getElementById('flightGeoMap');
+          const canvas = await html2canvas(mapContainer, {
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            logging: false,
+            scale: 1
+          });
 
-              // Resize and compress the image to reduce size
-              const maxWidth = 600;
-              const scale = maxWidth / canvas.width;
-              const resizedCanvas = document.createElement('canvas');
-              resizedCanvas.width = maxWidth;
-              resizedCanvas.height = canvas.height * scale;
-              const ctx = resizedCanvas.getContext('2d');
-              ctx.drawImage(canvas, 0, 0, resizedCanvas.width, resizedCanvas.height);
+          // Re-add Adjacent Area layer
+          if (hadAdjacentArea && flightGeoLayers.adjacentArea) {
+            flightGeoLayers.adjacentArea.addTo(flightGeoMap);
+            // Fit back to full view
+            flightGeoMap.fitBounds(flightGeoLayers.adjacentArea.getBounds(), { padding: [20, 20] });
+          }
 
-              // Use JPEG with 70% quality for smaller file size
-              const screenshot = resizedCanvas.toDataURL('image/jpeg', 0.7);
-              resolve(screenshot);
-            });
-          }, 1000); // Wait 1 second for tiles to fully load
+          // Resize and compress the image to reduce size
+          const maxWidth = 600;
+          const scale = maxWidth / canvas.width;
+          const resizedCanvas = document.createElement('canvas');
+          resizedCanvas.width = maxWidth;
+          resizedCanvas.height = canvas.height * scale;
+          const ctx = resizedCanvas.getContext('2d');
+          ctx.drawImage(canvas, 0, 0, resizedCanvas.width, resizedCanvas.height);
+
+          // Use JPEG with 70% quality for smaller file size
+          const screenshot = resizedCanvas.toDataURL('image/jpeg', 0.7);
+          resolve(screenshot);
 
         } catch (err) {
           console.error('Error capturing screenshot:', err);
