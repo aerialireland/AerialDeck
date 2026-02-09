@@ -3495,7 +3495,17 @@
                 return;
               }
 
-              const screenshot = canvas.toDataURL('image/png');
+              // Resize and compress the image to reduce size
+              const maxWidth = 600;
+              const scale = maxWidth / canvas.width;
+              const resizedCanvas = document.createElement('canvas');
+              resizedCanvas.width = maxWidth;
+              resizedCanvas.height = canvas.height * scale;
+              const ctx = resizedCanvas.getContext('2d');
+              ctx.drawImage(canvas, 0, 0, resizedCanvas.width, resizedCanvas.height);
+
+              // Use JPEG with 70% quality for smaller file size
+              const screenshot = resizedCanvas.toDataURL('image/jpeg', 0.7);
               resolve(screenshot);
             });
           }, 1000); // Wait 1 second for tiles to fully load
