@@ -25,6 +25,8 @@
     // Configure pdf.js worker
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   </script>
+  <!-- html2canvas for map screenshot capture -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     :root {
       --bg-primary: #ffffff;
@@ -2771,19 +2773,16 @@
             </div>
           </div>
 
-          <!-- Operation Map -->
+          <!-- Operation Map (auto-generated from Flight Geography Planner) -->
           <div class="evidence-bento-item">
             <div class="evidence-form-header">
               <div class="evidence-category-title">🗺️ Operation Map</div>
-              <label class="upload-btn">
-                <span>+ Upload</span>
-                <input type="file" class="upload-input" accept="image/*" onchange="uploadEvidence('flightGeography', this)">
-              </label>
+              <span style="font-size:0.7rem;color:var(--text-muted);">Auto-generated</span>
             </div>
             <div class="evidence-map-container">
-              ${(currentEvidence.flightGeography || []).length > 0
-                ? `<img class="evidence-map-image" src="${currentEvidence.flightGeography[0].path}" alt="Flight Geography Map" onclick="openImageModal('${currentEvidence.flightGeography[0].path}')">`
-                : '<div class="evidence-empty" style="padding:3rem;">Upload map from DroneDeck</div>'}
+              ${currentEvidence.flightGeographyMap?.mapScreenshot
+                ? `<img class="evidence-map-image" src="${currentEvidence.flightGeographyMap.mapScreenshot}" alt="Flight Geography Map" onclick="openImageModal('${currentEvidence.flightGeographyMap.mapScreenshot}')">`
+                : '<div class="evidence-empty" style="padding:3rem;">Save Flight Geography above to generate map</div>'}
             </div>
           </div>
 
@@ -3464,6 +3463,50 @@
       };
     }
 
+    // Capture map screenshot (excluding Adjacent Area)
+    async function captureMapScreenshot() {
+      return new Promise(async (resolve) => {
+        try {
+          // Hide Adjacent Area layer temporarily
+          if (flightGeoLayers.adjacentArea) {
+            flightGeoMap.removeLayer(flightGeoLayers.adjacentArea);
+          }
+
+          // Fit to GRB bounds (outermost visible layer)
+          const bounds = flightGeoLayers.groundRiskBuffer
+            ? flightGeoLayers.groundRiskBuffer.getBounds()
+            : flightGeoLayers.flightGeography.getBounds();
+          flightGeoMap.fitBounds(bounds, { padding: [30, 30] });
+
+          // Wait for map to render
+          await new Promise(r => setTimeout(r, 500));
+
+          // Capture screenshot
+          const mapContainer = document.getElementById('flightGeoMap');
+          const canvas = await html2canvas(mapContainer, {
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff'
+          });
+
+          const screenshot = canvas.toDataURL('image/png');
+
+          // Re-add Adjacent Area layer
+          if (flightGeoLayers.adjacentArea) {
+            flightGeoLayers.adjacentArea.addTo(flightGeoMap);
+          }
+
+          // Fit back to full view
+          flightGeoMap.fitBounds(flightGeoLayers.adjacentArea ? flightGeoLayers.adjacentArea.getBounds() : bounds, { padding: [20, 20] });
+
+          resolve(screenshot);
+        } catch (err) {
+          console.error('Error capturing screenshot:', err);
+          resolve(null);
+        }
+      });
+    }
+
     // Save flight geography data to Supabase
     async function saveFlightGeography() {
       if (!currentPlanId) {
@@ -3479,10 +3522,19 @@
         return;
       }
 
+      // Show saving indicator
+      const saveBtn = document.querySelector('.btn-save-geo');
+      const originalText = saveBtn.textContent;
+      saveBtn.textContent = '⏳ Saving...';
+      saveBtn.disabled = true;
+
       const contingencyM = CONTINGENCY_VOLUMES[mode] || 0;
       const tableData = BUFFER_TABLES[mode]?.[height] || {};
       const centerPoint = calculateCenterPoint(currentKMLData);
       const maxSpeed = MODE_SPEEDS[mode] || 0;
+
+      // Capture map screenshot (without Adjacent Area)
+      const mapScreenshot = await captureMapScreenshot();
 
       const geoData = {
         kmlCoordinates: currentKMLData,
@@ -3492,6 +3544,7 @@
         contingencyVolume: contingencyM,
         groundRiskBuffer: tableData.grb || 0,
         operationalVolumeVertical: tableData.opVolume || 0,
+        mapScreenshot: mapScreenshot,
         savedAt: new Date().toISOString()
       };
 
@@ -3527,7 +3580,7 @@
         if (res1.ok && res2.ok) {
           currentEvidence.flightGeographyMap = geoData;
           currentEvidence.flightGeographyData = flightParamsData;
-          renderEvidence(); // Re-render to show updated Flight Parameters
+          renderEvidence(); // Re-render to show updated Flight Parameters and map screenshot
           alert('Flight geography saved successfully!');
         } else {
           throw new Error('Save failed');
@@ -3535,6 +3588,9 @@
       } catch (err) {
         console.error('Error saving flight geography:', err);
         alert('Error saving flight geography');
+      } finally {
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
       }
     }
 
