@@ -390,6 +390,17 @@
     .flight-plan-card:hover { background: var(--accent-light); transform: translateX(4px); border-color: var(--accent); }
     .flight-plan-card h3 { color: var(--text-primary); font-size: 1rem; margin-bottom: 0.35rem; font-weight: 600; }
     .flight-plan-meta { display: flex; gap: 1.5rem; font-size: 0.8rem; color: var(--text-muted); flex-wrap: wrap; }
+    .delete-plan-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 0.25rem;
+      opacity: 0.4;
+      transition: opacity 0.2s, transform 0.2s;
+    }
+    .delete-plan-btn:hover { opacity: 1; transform: scale(1.2); }
+    .flight-plan-card:hover .delete-plan-btn { opacity: 0.7; }
     .status-badge {
       padding: 0.2rem 0.6rem;
       border-radius: 12px;
@@ -2240,7 +2251,10 @@
             <div class="flight-plan-card" data-id="${plan.id}">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;">
                 <h3>${esc(plan.name)}</h3>
-                ${getMiniComplianceBar(plan.id)}
+                <div style="display:flex;align-items:center;gap:0.5rem;">
+                  ${getMiniComplianceBar(plan.id)}
+                  <button class="delete-plan-btn" onclick="event.stopPropagation();deleteFlightPlan(${plan.id},'${esc(plan.name).replace(/'/g, "\\'")}');" title="Delete">🗑️</button>
+                </div>
               </div>
               <div class="flight-plan-meta">
                 <span>📅 ${formatDate(plan.date)}</span>
@@ -2545,6 +2559,40 @@
       } catch (err) {
         console.error('Error creating flight plan:', err);
         alert('Error creating flight plan. Please try again.');
+      }
+    }
+
+    async function deleteFlightPlan(planId, planName) {
+      const logsCount = flightLogs.filter(l => l.flight_plan_id == planId).length;
+      const message = logsCount > 0
+        ? `Are you sure you want to delete "${planName}"?\n\nThis will also delete ${logsCount} associated flight log${logsCount !== 1 ? 's' : ''}.\n\nThis action cannot be undone.`
+        : `Are you sure you want to delete "${planName}"?\n\nThis action cannot be undone.`;
+
+      if (!confirm(message)) return;
+
+      try {
+        const res = await fetch(`/api/flight-plans/${planId}`, {
+          method: 'DELETE'
+        });
+
+        if (res.ok) {
+          // Remove from local arrays
+          flightPlans = flightPlans.filter(p => p.id != planId);
+          flightLogs = flightLogs.filter(l => l.flight_plan_id != planId);
+
+          // Re-render
+          renderFlightPlans();
+          renderAllFlightLogs();
+          renderBentoGrid();
+
+          alert('Flight plan deleted successfully.');
+        } else {
+          const err = await res.json();
+          alert('Error: ' + (err.error || 'Failed to delete flight plan'));
+        }
+      } catch (err) {
+        console.error('Error deleting flight plan:', err);
+        alert('Error deleting flight plan. Please try again.');
       }
     }
 

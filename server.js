@@ -224,6 +224,37 @@ app.put('/api/flight-plans/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Delete a flight plan (and associated flight logs)
+app.delete('/api/flight-plans/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // First delete associated flight logs
+    const { error: logsError } = await supabase
+      .from('flight_logs')
+      .delete()
+      .eq('flight_plan_id', id);
+
+    if (logsError) {
+      console.error('Error deleting flight logs:', logsError);
+      // Continue anyway - the flight plan might not have logs
+    }
+
+    // Then delete the flight plan
+    const { error: planError } = await supabase
+      .from('flight_plans')
+      .delete()
+      .eq('id', id);
+
+    if (planError) throw planError;
+
+    res.json({ success: true, message: 'Flight plan deleted' });
+  } catch (err) {
+    console.error('Error deleting flight plan:', err);
+    res.status(500).json({ error: 'Failed to delete flight plan' });
+  }
+});
+
 // Get flight logs
 app.get('/api/flight-logs', requireAuth, async (req, res) => {
   try {
