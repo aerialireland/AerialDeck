@@ -3474,11 +3474,11 @@
             flightGeoMap.removeLayer(flightGeoLayers.adjacentArea);
           }
 
-          // Fit to GRB bounds (outermost visible layer)
+          // Fit to GRB bounds (outermost visible layer) with extra padding to show all circles
           const bounds = flightGeoLayers.groundRiskBuffer
             ? flightGeoLayers.groundRiskBuffer.getBounds()
             : flightGeoLayers.flightGeography.getBounds();
-          flightGeoMap.fitBounds(bounds, { padding: [30, 30] });
+          flightGeoMap.fitBounds(bounds, { padding: [80, 80] });
 
           // Wait for map to render and tiles to load
           await new Promise(r => setTimeout(r, 1500));
