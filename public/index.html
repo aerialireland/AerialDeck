@@ -3478,7 +3478,7 @@
           const bounds = flightGeoLayers.groundRiskBuffer
             ? flightGeoLayers.groundRiskBuffer.getBounds()
             : flightGeoLayers.flightGeography.getBounds();
-          flightGeoMap.fitBounds(bounds, { padding: [80, 80] });
+          flightGeoMap.fitBounds(bounds, { padding: [50, 50] });
 
           // Wait for map to render and tiles to load
           await new Promise(r => setTimeout(r, 1500));
@@ -3854,9 +3854,34 @@
           yPos += 10;
         }
 
+        // ========== OPERATION MAP (Auto-generated) ==========
+        if (evidence.flightGeographyMap?.mapScreenshot) {
+          doc.addPage();
+          yPos = margin;
+          addSectionHeader('OPERATION MAP');
+
+          try {
+            const imgData = evidence.flightGeographyMap.mapScreenshot;
+            const maxWidth = pageWidth - 2 * margin;
+            const maxHeight = 120; // mm
+
+            // Add the auto-generated map screenshot
+            doc.addImage(imgData, 'JPEG', margin, yPos, maxWidth, maxHeight);
+            yPos += maxHeight + 10;
+
+            // Add map details
+            doc.setFontSize(9);
+            doc.setTextColor(100, 100, 100);
+            const mapInfo = `Height: ${evidence.flightGeographyMap.height}m | Mode: ${evidence.flightGeographyMap.mode === 'S' ? 'Sports' : evidence.flightGeographyMap.mode === 'N' ? 'Normal' : 'Cine/Tripod'} | GRB: ${evidence.flightGeographyMap.groundRiskBuffer}m | CV: ${evidence.flightGeographyMap.contingencyVolume}m`;
+            doc.text(mapInfo, margin, yPos);
+            doc.setTextColor(0, 0, 0);
+          } catch (e) {
+            console.error('Error adding map to PDF:', e);
+          }
+        }
+
         // ========== EVIDENCE DOCUMENTS ==========
         const fileCategories = [
-          { key: 'flightGeography', title: 'Operation Map / Flight Geography' },
           { key: 'emergencyResponsePlan', title: 'Emergency Response Plan' },
           { key: 'weather', title: 'Weather Conditions' },
           { key: 'nearbyEvents', title: 'Nearby Events' },
