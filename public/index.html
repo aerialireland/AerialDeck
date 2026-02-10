@@ -2839,9 +2839,14 @@
         // Create flight area geometry
         let flightGeometry;
         if (kmlData.kmlCoordinates && kmlData.kmlCoordinates.length > 0) {
-          // Use KML polygon
-          const coords = kmlData.kmlCoordinates.map(c => [c.lng, c.lat]);
-          coords.push(coords[0]); // Close polygon
+          // Use KML polygon - coords may be [lng,lat] arrays or {lat,lng} objects
+          const coords = kmlData.kmlCoordinates.map(c =>
+            Array.isArray(c) ? c : [c.lng, c.lat]
+          );
+          // Ensure polygon is closed
+          if (coords[0][0] !== coords[coords.length-1][0] || coords[0][1] !== coords[coords.length-1][1]) {
+            coords.push(coords[0]);
+          }
           flightGeometry = turf.polygon([coords]);
         } else if (geoData.latitude && geoData.longitude) {
           // Use point with buffer (500m default radius)
