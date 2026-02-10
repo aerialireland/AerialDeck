@@ -1,0 +1,44 @@
+{
+  "versions": [
+    {
+      "id": "20260130V1",
+      "name": "IAA 20260130V1",
+      "fullName": "UAS Geographical Zones Ireland 20260130V1",
+      "issued": "2026-01-30",
+      "validFrom": "2026-02-06",
+      "file": "20260130V1.geojson"
+    },
+    {
+      "id": "20251129V2",
+      "name": "IAA 20251129V2",
+      "fullName": "UAS Geographical Zones Ireland 20251129V2",
+      "issued": "2025-11-29",
+      "validFrom": "2025-11-29",
+      "file": "20251129V2.geojson"
+    },
+    {
+      "id": "20250915",
+      "name": "IAA 20250915",
+      "fullName": "UAS Geographical Zones Ireland 20250915",
+      "issued": "2025-09-15",
+      "validFrom": "2025-09-15",
+      "file": "20250915.geojson"
+    },
+    {
+      "id": "20250417",
+      "name": "IAA 20250417",
+      "fullName": "UAS Geographical Zones Ireland 20250417",
+      "issued": "2025-04-17",
+      "validFrom": "2025-05-24",
+      "file": "20250417.geojson"
+    },
+    {
+      "id": "20250123",
+      "name": "IAA 20250123",
+      "fullName": "UAS Geographical Zones Ireland 20250123",
+      "issued": "2025-01-23",
+      "validFrom": "2025-01-23",
+      "file": "20250123.geojson"
+    }
+  ]
+}

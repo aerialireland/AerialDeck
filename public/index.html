@@ -1388,13 +1388,30 @@
 
       <!-- Airspace Zones Form Modal -->
       <div class="modal-overlay" id="airspaceZonesModal">
-        <div class="modal">
+        <div class="modal" style="max-width: 600px;">
           <button class="modal-close" onclick="closeModal('airspaceZonesModal')">&times;</button>
           <h3>Airspace Zones</h3>
           <form id="airspaceZonesForm" onsubmit="submitAirspaceZonesForm(event)">
             <div class="form-group">
-              <label>Enter each zone on a new line</label>
-              <textarea id="airspaceZonesText" rows="8" placeholder="e.g.&#10;ATZ Dublin Airport&#10;CTR Class C&#10;NOTAM Active Area"></textarea>
+              <label>IAA GeoZone Version</label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <select id="geozoneVersionSelect" style="flex: 1; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-light);">
+                  <option value="">Loading versions...</option>
+                </select>
+                <button type="button" class="btn-submit" onclick="autoDetectZones()" style="white-space: nowrap;">🔍 Auto-Detect</button>
+              </div>
+              <small style="color: var(--text-muted); margin-top: 0.25rem; display: block;">Select the IAA zone version valid at time of flight</small>
+            </div>
+            <div class="form-group">
+              <label>Detected Zones</label>
+              <div id="detectedZonesContainer" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border-light); border-radius: 4px; padding: 0.5rem; background: var(--card-bg);">
+                <div style="color: var(--text-muted); font-size: 0.85rem;">Click "Auto-Detect" to find zones based on flight coordinates</div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Manual Entry (optional)</label>
+              <textarea id="airspaceZonesText" rows="4" placeholder="Add additional zones manually (one per line)"></textarea>
+              <small style="color: var(--text-muted);">Any zones entered here will be added to the auto-detected zones</small>
             </div>
             <div class="form-actions">
               <button type="button" class="btn-cancel" onclick="closeModal('airspaceZonesModal')">Cancel</button>
@@ -1892,6 +1909,7 @@
       renderIncidentReports();
       populateFormDropdowns();
       initMap();
+      loadGeozoneVersions(); // Load IAA geozone versions for flight plan forms
     }
 
     function getPopularLocations(plans) {
@@ -2761,9 +2779,131 @@
       planning: { pilotInCommand: null, assistant: null, ftsOperator: null, ftsModel: 'Zephyr CC MVC3' },
       flightGeographyData: { latitude: null, longitude: null, operationalScenario: null, flightObjective: 'Photo & Video', flightCondition: 'Specific category', maxHeight: null, groundRiskBuffer: null, maxFlightSpeed: null, contingencyVolume: null, adjacentArea: null },
       flightGeographyMap: { kmlCoordinates: null, kmlFilename: null, height: null, mode: null, contingencyVolume: null, groundRiskBuffer: null, operationalVolumeVertical: null },
-      airspaceZones: [],
+      airspaceZones: { versionId: null, versionName: null, detectedZones: [], manualZones: [] },
       flightGeography: [], emergencyResponsePlan: [], weather: [], nearbyEvents: [], notams: [], uf101Permission: [], uf101Application: []
     };
+
+    // ============ GEOZONE MANAGEMENT ============
+    let geozoneVersions = [];
+    let currentGeozoneData = null;
+    let detectedZonesSelection = {};
+
+    async function loadGeozoneVersions() {
+      try {
+        const res = await fetch('/geozones/index.json');
+        const data = await res.json();
+        geozoneVersions = data.versions || [];
+        console.log('Loaded geozone versions:', geozoneVersions.length);
+      } catch (err) {
+        console.error('Error loading geozone versions:', err);
+        geozoneVersions = [];
+      }
+    }
+
+    async function loadGeozoneData(versionId) {
+      const version = geozoneVersions.find(v => v.id === versionId);
+      if (!version) return null;
+      try {
+        const res = await fetch(`/geozones/${version.file}`);
+        currentGeozoneData = await res.json();
+        return currentGeozoneData;
+      } catch (err) {
+        console.error('Error loading geozone data:', err);
+        return null;
+      }
+    }
+
+    function autoDetectZones() {
+      const versionId = document.getElementById('geozoneVersionSelect').value;
+      if (!versionId) {
+        alert('Please select a GeoZone version first');
+        return;
+      }
+
+      const geoData = currentEvidence.flightGeographyData || {};
+      const kmlData = currentEvidence.flightGeographyMap || {};
+
+      if (!geoData.latitude && !kmlData.kmlCoordinates) {
+        alert('No flight coordinates found. Please set Flight Parameters or upload a KML first.');
+        return;
+      }
+
+      loadGeozoneData(versionId).then(geojson => {
+        if (!geojson) {
+          alert('Failed to load geozone data');
+          return;
+        }
+
+        const intersecting = [];
+
+        // Create flight area geometry
+        let flightGeometry;
+        if (kmlData.kmlCoordinates && kmlData.kmlCoordinates.length > 0) {
+          // Use KML polygon
+          const coords = kmlData.kmlCoordinates.map(c => [c.lng, c.lat]);
+          coords.push(coords[0]); // Close polygon
+          flightGeometry = turf.polygon([coords]);
+        } else if (geoData.latitude && geoData.longitude) {
+          // Use point with buffer (500m default radius)
+          const radius = geoData.groundRiskBuffer || 500;
+          flightGeometry = turf.circle([parseFloat(geoData.longitude), parseFloat(geoData.latitude)], radius / 1000, { units: 'kilometers', steps: 32 });
+        }
+
+        if (!flightGeometry) {
+          alert('Could not create flight geometry');
+          return;
+        }
+
+        // Check intersection with each zone
+        geojson.features.forEach(feature => {
+          try {
+            if (turf.booleanIntersects(flightGeometry, feature)) {
+              intersecting.push({
+                id: feature.properties.identifier,
+                name: feature.properties.name,
+                type: feature.properties.type,
+                selected: true
+              });
+            }
+          } catch (e) {
+            // Skip invalid geometries
+          }
+        });
+
+        // Update UI
+        detectedZonesSelection = {};
+        intersecting.forEach(z => { detectedZonesSelection[z.id] = z; });
+
+        const container = document.getElementById('detectedZonesContainer');
+        if (intersecting.length === 0) {
+          container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 1rem; text-align: center;">No IAA zones detected at this location</div>';
+        } else {
+          container.innerHTML = intersecting.map(z => `
+            <label style="display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.5rem; border-bottom: 1px solid var(--border-light); cursor: pointer;">
+              <input type="checkbox" checked onchange="toggleZoneSelection('${z.id}')" style="margin-top: 0.25rem;">
+              <div>
+                <div style="font-weight: 600; color: var(--text-primary);">${esc(z.id)} - ${esc(z.name)}</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">${esc(z.type)}</div>
+              </div>
+            </label>
+          `).join('');
+        }
+      });
+    }
+
+    function toggleZoneSelection(zoneId) {
+      if (detectedZonesSelection[zoneId]) {
+        detectedZonesSelection[zoneId].selected = !detectedZonesSelection[zoneId].selected;
+      }
+    }
+
+    function populateGeozoneVersionSelect(currentVersionId) {
+      const select = document.getElementById('geozoneVersionSelect');
+      if (!select) return;
+
+      select.innerHTML = '<option value="">-- Select Version --</option>' +
+        geozoneVersions.map(v => `<option value="${v.id}" ${v.id === currentVersionId ? 'selected' : ''}>${v.name} (valid from ${v.validFrom})</option>`).join('');
+    }
 
     async function loadEvidence(planId) {
       try {
@@ -2785,7 +2925,25 @@
       const container = document.getElementById('evidenceCategories');
       const planning = currentEvidence.planning || {};
       const geoData = currentEvidence.flightGeographyData || {};
-      const zones = currentEvidence.airspaceZones || [];
+      const zonesData = currentEvidence.airspaceZones || {};
+
+      // Handle backwards compatibility - old format was array of strings
+      let zonesDisplay = '';
+      let hasZones = false;
+      if (Array.isArray(zonesData)) {
+        // Old format
+        hasZones = zonesData.length > 0;
+        zonesDisplay = zonesData.map(zone => `<div class="zone-tag">${esc(zone)}</div>`).join('');
+      } else {
+        // New format
+        const detected = zonesData.detectedZones || [];
+        const manual = zonesData.manualZones || [];
+        hasZones = detected.length > 0 || manual.length > 0;
+        const versionLabel = zonesData.versionName ? `<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.5rem;">📄 ${esc(zonesData.versionName)}</div>` : '';
+        const detectedTags = detected.map(z => `<div class="zone-tag" title="${esc(z.type)}">${esc(z.id)} - ${esc(z.name)}</div>`).join('');
+        const manualTags = manual.map(z => `<div class="zone-tag" style="background:var(--border-light);">${esc(z)}</div>`).join('');
+        zonesDisplay = versionLabel + detectedTags + manualTags;
+      }
 
       container.innerHTML = `
         <!-- BENTO GRID: Planning + Airspace Zones -->
@@ -2813,9 +2971,9 @@
               <button class="upload-btn" onclick="showAirspaceZonesForm()">✏️ Edit</button>
             </div>
             <div class="evidence-form-data">
-              ${zones.length > 0 ? `
+              ${hasZones ? `
                 <div class="zones-list">
-                  ${zones.map(zone => `<div class="zone-tag">${esc(zone)}</div>`).join('')}
+                  ${zonesDisplay}
                 </div>
               ` : '<div class="evidence-empty">Click Edit to add zones</div>'}
             </div>
@@ -2979,18 +3137,67 @@
     }
 
     function showAirspaceZonesForm() {
-      const zones = currentEvidence.airspaceZones || [];
-      document.getElementById('airspaceZonesText').value = zones.join('\n');
+      const zonesData = currentEvidence.airspaceZones || {};
+
+      // Handle backwards compatibility - old format was array of strings
+      if (Array.isArray(zonesData)) {
+        document.getElementById('airspaceZonesText').value = zonesData.join('\n');
+        populateGeozoneVersionSelect(null);
+        detectedZonesSelection = {};
+        document.getElementById('detectedZonesContainer').innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem;">Click "Auto-Detect" to find zones based on flight coordinates</div>';
+      } else {
+        // New format
+        populateGeozoneVersionSelect(zonesData.versionId);
+        document.getElementById('airspaceZonesText').value = (zonesData.manualZones || []).join('\n');
+
+        // Restore detected zones selection
+        detectedZonesSelection = {};
+        const detected = zonesData.detectedZones || [];
+        if (detected.length > 0) {
+          detected.forEach(z => { detectedZonesSelection[z.id] = { ...z, selected: true }; });
+          const container = document.getElementById('detectedZonesContainer');
+          container.innerHTML = detected.map(z => `
+            <label style="display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.5rem; border-bottom: 1px solid var(--border-light); cursor: pointer;">
+              <input type="checkbox" checked onchange="toggleZoneSelection('${z.id}')" style="margin-top: 0.25rem;">
+              <div>
+                <div style="font-weight: 600; color: var(--text-primary);">${esc(z.id)} - ${esc(z.name)}</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">${esc(z.type)}</div>
+              </div>
+            </label>
+          `).join('');
+        } else {
+          document.getElementById('detectedZonesContainer').innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem;">Click "Auto-Detect" to find zones based on flight coordinates</div>';
+        }
+      }
+
       document.getElementById('airspaceZonesModal').classList.add('active');
     }
 
     async function submitAirspaceZonesForm(e) {
       e.preventDefault();
-      const text = document.getElementById('airspaceZonesText').value;
-      const zones = text.split('\n').map(z => z.trim()).filter(z => z.length > 0);
+
+      const versionId = document.getElementById('geozoneVersionSelect').value;
+      const versionInfo = geozoneVersions.find(v => v.id === versionId);
+      const manualText = document.getElementById('airspaceZonesText').value;
+      const manualZones = manualText.split('\n').map(z => z.trim()).filter(z => z.length > 0);
+
+      // Get selected detected zones
+      const detectedZones = Object.values(detectedZonesSelection).filter(z => z.selected).map(z => ({
+        id: z.id,
+        name: z.name,
+        type: z.type
+      }));
+
+      const zonesPayload = {
+        versionId: versionId || null,
+        versionName: versionInfo ? versionInfo.name : null,
+        detectedZones: detectedZones,
+        manualZones: manualZones
+      };
+
       try {
         const res = await fetch(`/api/flight-plans/${currentPlanId}/evidence/airspaceZones`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zones })
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zones: zonesPayload })
         });
         if (res.ok) {
           const result = await res.json();
@@ -3858,13 +4065,38 @@
         yPos += 5;
 
         // Airspace Zones Section
-        const zones = evidence.airspaceZones || [];
+        const zonesData = evidence.airspaceZones || {};
         addSectionHeader('AIRSPACE ZONES');
-        if (zones.length > 0) {
-          zones.forEach((zone, i) => {
+
+        // Handle both old array format and new object format
+        let allZones = [];
+        let versionLabel = '';
+
+        if (Array.isArray(zonesData)) {
+          // Old format - array of strings
+          allZones = zonesData.map(z => ({ display: typeof z === 'string' ? z : (z.name || z.zone_name || 'Unknown') }));
+        } else {
+          // New format - object with versionName, detectedZones, manualZones
+          versionLabel = zonesData.versionName || '';
+          const detected = (zonesData.detectedZones || []).map(z => ({ display: `${z.id} - ${z.name}`, type: z.type }));
+          const manual = (zonesData.manualZones || []).map(z => ({ display: z, type: 'Manual' }));
+          allZones = [...detected, ...manual];
+        }
+
+        if (versionLabel) {
+          doc.setFontSize(9);
+          doc.setTextColor(100, 100, 100);
+          doc.text(`IAA GeoZone Version: ${versionLabel}`, margin, yPos);
+          doc.setTextColor(0, 0, 0);
+          yPos += 8;
+        }
+
+        if (allZones.length > 0) {
+          allZones.forEach((zone, i) => {
             checkPageBreak(8);
             doc.setFontSize(10);
-            doc.text(`${i + 1}. ${zone.name || zone.zone_name || zone}`, margin, yPos);
+            const zoneText = zone.type ? `${i + 1}. ${zone.display} (${zone.type})` : `${i + 1}. ${zone.display}`;
+            doc.text(zoneText, margin, yPos);
             yPos += 6;
           });
         } else {
