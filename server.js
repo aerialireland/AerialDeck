@@ -484,11 +484,15 @@ app.get('/api/batteries', requireAuth, async (req, res) => {
 
     const batteriesWithStats = batteries.map(battery => {
       const batteryLogs = logs.filter(l => l.battery && l.battery.includes(battery.serial));
+      const specificHours = parseFloat((batteryLogs.reduce((sum, l) => sum + (l.air_time_minutes || 0), 0) / 60).toFixed(1));
+      const openHours = parseFloat(battery.open_category_hours || 0);
       return {
         ...battery,
-        serial_number: battery.serial, // Map to expected field name
+        serial_number: battery.serial,
         cycles: battery.cycles || batteryLogs.length,
-        total_hours: (batteryLogs.reduce((sum, l) => sum + (l.air_time_minutes || 0), 0) / 60).toFixed(1)
+        specific_category_hours: specificHours.toFixed(1),
+        open_category_hours: openHours.toFixed(1),
+        total_hours: (specificHours + openHours).toFixed(1)
       };
     });
 
@@ -496,6 +500,30 @@ app.get('/api/batteries', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Error fetching batteries:', err);
     res.status(500).json({ error: 'Failed to fetch batteries' });
+  }
+});
+
+// Update battery open category hours
+app.patch('/api/batteries/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const value = parseFloat(req.body.open_category_hours);
+    if (isNaN(value) || value < 0) {
+      return res.status(400).json({ error: 'open_category_hours must be a non-negative number' });
+    }
+
+    const { data, error } = await supabase
+      .from('batteries')
+      .update({ open_category_hours: value })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error('Error updating battery:', err);
+    res.status(500).json({ error: 'Failed to update battery' });
   }
 });
 

@@ -1887,12 +1887,14 @@
           label: code,
           cycles: b.cycles || 0,
           totalHours: parseFloat(b.total_hours) || 0,
+          specificHours: parseFloat(b.specific_category_hours) || 0,
+          openHours: parseFloat(b.open_category_hours) || 0,
           color: colorInfo.color,
           colorName: colorInfo.name
         };
       }).sort((a, b) => {
-        // Sort by cycles descending (most used to least used)
-        return (b.cycles || 0) - (a.cycles || 0);
+        // Sort by total hours descending (most used to least used)
+        return (b.totalHours || 0) - (a.totalHours || 0);
       });
 
       // Build stats object from Supabase data
@@ -2065,20 +2067,19 @@
           <div class="value" style="font-size:2.5rem;">${avgMins}<span class="unit">m</span> ${avgSecs}<span class="unit">s</span></div>
         </div>
         <div class="bento-card card-batteries">
-          <h3>Battery Usage (cycles)</h3>
+          <h3>Battery Hours</h3>
           <div class="battery-bars">
             ${(() => {
               const batteries = stats.batteryUsage || [];
-              const maxCycles = Math.max(...batteries.map(x => x.cycles || 0), 1);
-              const maxHeight = 55; // pixels for tallest bar
+              const maxHours = Math.max(...batteries.map(x => x.totalHours || 0), 0.1);
+              const maxHeight = 55;
               return batteries.map(b => {
-                const cycles = b.cycles || 0;
-                // Use pixel heights for proportional bars
-                const heightPx = cycles > 0 ? Math.round((cycles / maxCycles) * maxHeight) : 8;
+                const hours = b.totalHours || 0;
+                const heightPx = hours > 0 ? Math.max(Math.round((hours / maxHours) * maxHeight), 8) : 8;
                 return `
                   <div class="battery-bar">
                     <div class="bar" style="height:${heightPx}px;background:${b.color};display:flex;align-items:center;justify-content:center;">
-                      <span style="color:#333;font-size:0.65rem;font-weight:700;">${cycles}</span>
+                      <span style="color:#333;font-size:0.65rem;font-weight:700;">${hours}h</span>
                     </div>
                     <span class="label" style="color:#666;writing-mode:horizontal-tb;height:auto;font-size:0.5rem;margin-top:4px;">${b.code}</span>
                   </div>
@@ -2386,6 +2387,8 @@
         : batteryLogs.map(battery => {
           const cycles = battery.cycles || 0;
           const totalHours = battery.total_hours || 0;
+          const specificHours = battery.specific_category_hours || 0;
+          const openHours = battery.open_category_hours || 0;
           return `
             <div class="data-card" style="border-left: 4px solid #22c55e;">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;">
@@ -2395,16 +2398,61 @@
               <div class="data-card-meta">
                 <span>🔢 ${esc(battery.serial_number || '')}</span>
                 <span>🔄 ${cycles} cycles</span>
-                <span>⏱️ ${totalHours}h total</span>
               </div>
-              <div class="data-card-meta" style="margin-top:0.5rem;">
-                <span>⚡ ${battery.capacity ? battery.capacity + 'mAh' : '-'}</span>
+              <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid #e5e7eb;">
+                <div style="font-size:1.25rem;font-weight:700;color:#22c55e;">⏱️ ${totalHours}h total</div>
+                <div style="display:flex;gap:1rem;font-size:0.75rem;color:#6b7280;margin-top:0.25rem;">
+                  <span>Specific: ${specificHours}h</span>
+                  <span>Open: ${openHours}h</span>
+                </div>
+              </div>
+              <div style="margin-top:0.75rem;">
+                <label style="font-size:0.75rem;color:#6b7280;display:block;margin-bottom:0.25rem;">Open Category Hours</label>
+                <div style="display:flex;align-items:center;gap:0.5rem;">
+                  <input type="number" min="0" step="0.1" value="${openHours}"
+                    data-battery-id="${battery.id}"
+                    onchange="saveBatteryOpenHours(this)"
+                    style="flex:1;padding:0.4rem 0.5rem;border:1px solid #d1d5db;border-radius:6px;font-size:0.85rem;">
+                  <span class="battery-save-status" id="saveStatus-${battery.id}" style="font-size:0.7rem;color:#10b981;opacity:0;transition:opacity 0.3s;">Saved</span>
+                </div>
               </div>
             </div>
           `;
         }).join('');
     }
 
+    async function saveBatteryOpenHours(inputEl) {
+      const batteryId = inputEl.dataset.batteryId;
+      const value = parseFloat(inputEl.value) || 0;
+      if (value < 0) { inputEl.value = 0; return; }
+      try {
+        const res = await fetch(`/api/batteries/${batteryId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ open_category_hours: value })
+        });
+        if (!res.ok) throw new Error('Failed to save');
+        // Update local batteryLogs data
+        const bat = batteryLogs.find(b => b.id == batteryId);
+        if (bat) {
+          bat.open_category_hours = value.toFixed(1);
+          bat.total_hours = (parseFloat(bat.specific_category_hours || 0) + value).toFixed(1);
+        }
+        // Update stats.batteryUsage for the bento chart
+        if (stats.batteryUsage) {
+          const chartBat = stats.batteryUsage.find(b => b.code === (bat?.serial_number || ''));
+          if (chartBat) {
+            chartBat.openHours = value;
+            chartBat.totalHours = parseFloat(bat?.total_hours || 0);
+          }
+        }
+        // Show saved indicator
+        const status = document.getElementById(`saveStatus-${batteryId}`);
+        if (status) { status.style.opacity = '1'; setTimeout(() => { status.style.opacity = '0'; }, 2000); }
+        // Re-render bento grid to update chart
+        renderBentoGrid();
+      } catch (err) { console.error('Error saving battery hours:', err); }
+    }
 
     function showPlanDetail(planId) {
       // Use == for type coercion since IDs from Supabase may be strings
