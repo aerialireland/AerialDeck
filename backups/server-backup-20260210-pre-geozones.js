@@ -174,7 +174,7 @@ app.post('/api/flight-plans', requireAuth, async (req, res) => {
 
     // Initialize with default evidence structure
     const initialEvidence = {
-      planning: { pilotInCommand: null, assistant: null, ftsOperator: null, ftsModel: '' },
+      planning: { pilotInCommand: null, assistant: null, ftsOperator: null, ftsModel: 'Zephyr CC MVC3' },
       flightGeographyData: { latitude: null, longitude: null, operationalScenario: null, flightObjective: 'Photo & Video', flightCondition: 'Specific category', maxHeight: null, groundRiskBuffer: null, maxFlightSpeed: null, contingencyVolume: null, adjacentArea: null },
       airspaceZones: [],
       flightGeography: [], emergencyResponsePlan: [], weather: [], nearbyEvents: [], notams: [], uf101Permission: [], uf101Application: []
@@ -678,7 +678,7 @@ app.post('/api/incident-reports', requireAuth, async (req, res) => {
 // Files stored in Supabase Storage
 
 const defaultEvidence = {
-  planning: { pilotInCommand: null, assistant: null, ftsOperator: null, ftsModel: '' },
+  planning: { pilotInCommand: null, assistant: null, ftsOperator: null, ftsModel: 'Zephyr CC MVC3' },
   flightGeographyData: { latitude: null, longitude: null, operationalScenario: null, flightObjective: 'Photo & Video', flightCondition: 'Specific category', maxHeight: null, groundRiskBuffer: null, maxFlightSpeed: null, contingencyVolume: null, adjacentArea: null },
   airspaceZones: [],
   flightGeography: [], emergencyResponsePlan: [], weather: [], nearbyEvents: [], notams: [], uf101Permission: [], uf101Application: []

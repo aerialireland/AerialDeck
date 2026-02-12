@@ -1314,11 +1314,7 @@
             </div>
             <div class="form-group">
               <label>FTS Model</label>
-              <select id="planningFTSModel">
-                <option value="">Select FTS model...</option>
-                <option value="Zephyr CC MVC3 PRO">Zephyr CC MVC3 PRO</option>
-                <option value="Zephyr CC MVC3 ENTERPRISE">Zephyr CC MVC3 ENTERPRISE</option>
-              </select>
+              <input type="text" id="planningFTSModel" value="Zephyr CC MVC3" readonly style="background:#f0f0f0;">
             </div>
             <div class="form-actions">
               <button type="button" class="btn-cancel" onclick="closeModal('planningModal')">Cancel</button>
@@ -1624,28 +1620,6 @@
         <div class="form-actions">
           <button type="button" class="btn-cancel" onclick="closeModal('incidentModal')">Cancel</button>
           <button type="submit" class="btn-submit">Submit Report</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Edit Flight Plan Modal -->
-  <div class="modal-overlay" id="editFlightPlanModal">
-    <div class="modal">
-      <button class="modal-close" onclick="closeModal('editFlightPlanModal')">&times;</button>
-      <h3>Edit Flight Plan</h3>
-      <form id="editFlightPlanForm" onsubmit="updateFlightPlan(event)">
-        <div class="form-group">
-          <label>Flight Plan Name *</label>
-          <input type="text" id="editPlanName" placeholder="e.g., Site Survey - Dublin Port" required>
-        </div>
-        <div class="form-group">
-          <label>Date *</label>
-          <input type="date" id="editPlanDate" required>
-        </div>
-        <div class="form-actions">
-          <button type="button" class="btn-cancel" onclick="closeModal('editFlightPlanModal')">Cancel</button>
-          <button type="submit" class="btn-submit">Save Changes</button>
         </div>
       </form>
     </div>
@@ -2458,10 +2432,7 @@
 
       document.getElementById('detailHeader').innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <h2>${esc(plan?.name || 'Flight Plan')}</h2>
-            <button onclick="showEditFlightPlanForm()" style="background:none;border:1px solid #ccc;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:14px;" title="Edit flight plan name and date">✏️</button>
-          </div>
+          <h2>${esc(plan?.name || 'Flight Plan')}</h2>
           ${getMiniComplianceBar(plan?.id || currentPlanId)}
         </div>
         <div class="detail-info">
@@ -2472,39 +2443,6 @@
           <div class="detail-info-item"><label>Total Time</label><span>${totalMinutes.toFixed(1)}m</span></div>
         </div>
       `;
-    }
-
-    // ============ EDIT FLIGHT PLAN ============
-    function showEditFlightPlanForm() {
-      const plan = flightPlans.find(p => p.id == currentPlanId);
-      if (!plan) return;
-      document.getElementById('editPlanName').value = plan.name || '';
-      document.getElementById('editPlanDate').value = plan.date || '';
-      document.getElementById('editFlightPlanModal').classList.add('active');
-    }
-
-    async function updateFlightPlan(e) {
-      e.preventDefault();
-      const name = document.getElementById('editPlanName').value;
-      const date = document.getElementById('editPlanDate').value;
-      try {
-        const res = await fetch(`/api/flight-plans/${currentPlanId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, date })
-        });
-        if (res.ok) {
-          const updated = await res.json();
-          const idx = flightPlans.findIndex(p => p.id == currentPlanId);
-          if (idx !== -1) {
-            flightPlans[idx].name = updated.name;
-            flightPlans[idx].date = updated.date;
-          }
-          updateDetailHeader();
-          renderFlightPlans();
-          closeModal('editFlightPlanModal');
-        }
-      } catch (err) { console.error('Error updating flight plan:', err); }
     }
 
     document.getElementById('backBtn').addEventListener('click', () => {
@@ -2838,7 +2776,7 @@
     ];
 
     const defaultEvidence = {
-      planning: { pilotInCommand: null, assistant: null, ftsOperator: null, ftsModel: '' },
+      planning: { pilotInCommand: null, assistant: null, ftsOperator: null, ftsModel: 'Zephyr CC MVC3' },
       flightGeographyData: { latitude: null, longitude: null, operationalScenario: null, flightObjective: 'Photo & Video', flightCondition: 'Specific category', maxHeight: null, groundRiskBuffer: null, maxFlightSpeed: null, contingencyVolume: null, adjacentArea: null },
       flightGeographyMap: { kmlCoordinates: null, kmlFilename: null, height: null, mode: null, contingencyVolume: null, groundRiskBuffer: null, operationalVolumeVertical: null },
       airspaceZones: { versionId: null, versionName: null, detectedZones: [], manualZones: [] },
@@ -3026,7 +2964,7 @@
                 <div class="form-data-row"><strong>PIC:</strong> ${esc(planning.pilotInCommand || 'Not set')}</div>
                 <div class="form-data-row"><strong>Assistant:</strong> ${esc(planning.assistant || 'None')}</div>
                 <div class="form-data-row"><strong>FTS Operator:</strong> ${esc(planning.ftsOperator || 'Not set')}</div>
-                <div class="form-data-row"><strong>FTS Model:</strong> ${esc(planning.ftsModel || 'Not set')}</div>
+                <div class="form-data-row"><strong>FTS Model:</strong> ${esc(planning.ftsModel || 'Zephyr CC MVC3')}</div>
               ` : '<div class="evidence-empty">Click Edit to set crew</div>'}
             </div>
           </div>
@@ -3137,7 +3075,7 @@
       document.getElementById('planningPIC').value = planning.pilotInCommand || '';
       document.getElementById('planningAssistant').value = planning.assistant || '';
       document.getElementById('planningFTSOperator').value = planning.ftsOperator || '';
-      document.getElementById('planningFTSModel').value = planning.ftsModel || '';
+      document.getElementById('planningFTSModel').value = planning.ftsModel || 'Zephyr CC MVC3';
       document.getElementById('planningModal').classList.add('active');
     }
 
@@ -3147,7 +3085,7 @@
         pilotInCommand: document.getElementById('planningPIC').value,
         assistant: document.getElementById('planningAssistant').value,
         ftsOperator: document.getElementById('planningFTSOperator').value,
-        ftsModel: document.getElementById('planningFTSModel').value || ''
+        ftsModel: document.getElementById('planningFTSModel').value || 'Zephyr CC MVC3'
       };
       try {
         const res = await fetch(`/api/flight-plans/${currentPlanId}/evidence/planning`, {
