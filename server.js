@@ -207,11 +207,15 @@ app.post('/api/flight-plans', requireAuth, async (req, res) => {
 app.put('/api/flight-plans/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, date, location, geozone, max_altitude, status } = req.body;
+    const allowedFields = ['name', 'date', 'location', 'geozone', 'max_altitude', 'status'];
+    const updates = {};
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) updates[field] = req.body[field];
+    }
 
     const { data, error } = await supabase
       .from('flight_plans')
-      .update({ name, date, location, geozone, max_altitude, status })
+      .update(updates)
       .eq('id', id)
       .select()
       .single();
