@@ -1904,6 +1904,7 @@
         totalPilots: stats.pilots || pilots.length,
         totalDrones: stats.drones || drones.length,
         totalFlightTimeSeconds: (parseFloat(stats.total_flight_minutes) || 0) * 60,
+        totalOpenCategoryHours: batteryUsage.reduce((sum, b) => sum + (b.openHours || 0), 0),
         avgFlightTimeSeconds: flightLogs.length > 0
           ? Math.round((parseFloat(stats.total_flight_minutes) || 0) * 60 / flightLogs.length)
           : 0,
@@ -1969,7 +1970,19 @@
         </div>
         <div class="bento-card card-time">
           <h3>Flight Hours</h3>
-          <div class="value">${hours}<span class="unit">h</span> ${mins}<span class="unit">m</span></div>
+          ${(() => {
+            const openH = stats.totalOpenCategoryHours || 0;
+            const totalH = hours + (mins / 60) + openH;
+            const totalHours = Math.floor(totalH);
+            const totalMins = Math.round((totalH - totalHours) * 60);
+            return `
+              <div class="value">${totalHours}<span class="unit">h</span> ${totalMins}<span class="unit">m</span></div>
+              <div style="display:flex;gap:0.75rem;font-size:0.7rem;color:#6b7280;margin-top:0.25rem;">
+                <span>Specific: ${hours}h ${mins}m</span>
+                <span>Open: ${openH.toFixed(1)}h</span>
+              </div>
+            `;
+          })()}
         </div>
         <div class="bento-card card-pilots">
           <h3>Pilots (${stats.totalPilots})</h3>
