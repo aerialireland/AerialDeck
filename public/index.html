@@ -595,12 +595,32 @@
       width: 100%;
       height: 100px;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       background: #fef2f2;
       color: #dc2626;
       font-size: 2rem;
       cursor: pointer;
+    }
+    .evidence-preview-pdf .file-ext {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 2px;
+    }
+    .evidence-preview-pdf.ext-xlsx, .evidence-preview-pdf.ext-xls, .evidence-preview-pdf.ext-csv {
+      background: #f0fdf4; color: #16a34a;
+    }
+    .evidence-preview-pdf.ext-docx, .evidence-preview-pdf.ext-doc {
+      background: #eff6ff; color: #2563eb;
+    }
+    .evidence-preview-pdf.ext-pptx, .evidence-preview-pdf.ext-ppt {
+      background: #fff7ed; color: #ea580c;
+    }
+    .evidence-preview-pdf.ext-txt {
+      background: #f5f5f5; color: #525252;
     }
     .evidence-file-info {
       padding: 0.5rem;
@@ -3359,7 +3379,7 @@
                           <div class="evidence-file">
                             ${file.fileType === 'image'
                               ? `<img class="evidence-preview" src="${file.path}" alt="${esc(file.originalName)}" onclick="openImageModal('${file.path}')">`
-                              : `<div class="evidence-preview-pdf" onclick="window.open('${file.path}', '_blank')">📄</div>`}
+                              : fileTypePreview(file.originalName, file.path)}
                             <div class="evidence-file-info">
                               <div class="evidence-file-name" title="${esc(file.originalName)}">${esc(file.originalName)}</div>
                               <div class="evidence-file-date">${formatDate(file.uploadDate)}</div>
@@ -3563,7 +3583,7 @@
             filename: `${timestamp}_${safeFilename}`,
             originalName: file.name,
             uploadDate: new Date().toISOString().split('T')[0],
-            fileType: file.type.startsWith('image/') ? 'image' : 'pdf',
+            fileType: file.type.startsWith('image/') ? 'image' : 'document',
             mimeType: file.type,
             size: file.size,
             path: urlData.publicUrl
@@ -3658,7 +3678,7 @@
                 <div class="evidence-file">
                   ${file.fileType === 'image'
                     ? `<img class="evidence-preview" src="${file.path}" alt="${esc(file.originalName)}" onclick="openImageModal('${file.path}')">`
-                    : `<div class="evidence-preview-pdf" onclick="window.open('${file.path}', '_blank')">📄</div>`}
+                    : fileTypePreview(file.originalName, file.path)}
                   <div class="evidence-file-info">
                     <div class="evidence-file-name" title="${esc(file.originalName)}">${esc(file.originalName)}</div>
                     <div class="evidence-file-date">${formatDate(file.uploadDate)}</div>
@@ -3666,7 +3686,7 @@
                       <a href="${file.path}" download="${esc(file.originalName)}" class="upload-btn" style="font-size:0.65rem;padding:2px 6px;" onclick="event.stopPropagation();">⬇</a>
                       <label class="upload-btn" style="font-size:0.65rem;padding:2px 6px;cursor:pointer;">
                         Replace
-                        <input type="file" class="upload-input" accept=".pdf,image/*,.docx" onchange="replaceSoraDoc(${file.id}, this)">
+                        <input type="file" class="upload-input" accept=".pdf,image/*,.docx,.xlsx,.xls,.csv,.txt,.pptx" onchange="replaceSoraDoc(${file.id}, this)">
                       </label>
                     </div>
                   </div>
@@ -3702,7 +3722,7 @@
             filename: `${timestamp}_${safeFilename}`,
             originalName: file.name,
             uploadDate: new Date().toISOString().split('T')[0],
-            fileType: file.type.startsWith('image/') ? 'image' : 'pdf',
+            fileType: file.type.startsWith('image/') ? 'image' : 'document',
             mimeType: file.type,
             size: file.size,
             path: urlData.publicUrl
@@ -3753,7 +3773,7 @@
           filename: `${timestamp}_${safeFilename}`,
           originalName: file.name,
           uploadDate: new Date().toISOString().split('T')[0],
-          fileType: file.type.startsWith('image/') ? 'image' : 'pdf',
+          fileType: file.type.startsWith('image/') ? 'image' : 'document',
           mimeType: file.type,
           size: file.size,
           path: urlData.publicUrl
@@ -3835,6 +3855,15 @@
       if (s.includes('progress')) return 'status-in-progress';
       return 'status-planned';
     }
+    function fileTypePreview(filename, path) {
+      const ext = (filename || '').split('.').pop().toLowerCase();
+      const icons = { pdf:'📕', xlsx:'📊', xls:'📊', csv:'📊', docx:'📝', doc:'📝', pptx:'📽️', ppt:'📽️', txt:'📄' };
+      const icon = icons[ext] || '📄';
+      return `<div class="evidence-preview-pdf ext-${ext}" onclick="window.open('${path}', '_blank')">
+        ${icon}<span class="file-ext">${ext}</span>
+      </div>`;
+    }
+
     function formatDate(d) {
       if (!d) return '-';
       return new Date(d).toLocaleDateString('en-IE', { day: 'numeric', month: 'short', year: 'numeric' });
