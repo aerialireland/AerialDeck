@@ -1399,6 +1399,24 @@
             </div>
             <div class="form-row">
               <div class="form-group">
+                <label>Drone</label>
+                <select id="geoDrone">
+                  <option value="">-- Select drone --</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>VLOS Conditions</label>
+                <select id="geoVlosConditions">
+                  <option value="">-- Select conditions --</option>
+                  <option value="Clear sky 800m">Clear sky 800m</option>
+                  <option value="Cloudy sky 950m">Cloudy sky 950m</option>
+                  <option value="Dark/night time 1000m">Dark/night time 1000m</option>
+                  <option value="Mountainous 370m">Mountainous 370m</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
                 <label>Flight Objective</label>
                 <input type="text" id="geoObjective" value="Photo & Video" readonly style="background:#f0f0f0;">
               </div>
@@ -2428,6 +2446,8 @@
         : filtered.map(plan => {
           const logsCount = plan.flight_count || flightLogs.filter(l => l.flight_plan_id == plan.id).length;
           const totalTime = plan.total_air_time || 0;
+          const planEvidence = allPlansEvidence[plan.id] || {};
+          const geoData = planEvidence.flightGeographyData || {};
           return `
             <div class="flight-plan-card" data-id="${plan.id}">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;">
@@ -2442,6 +2462,8 @@
                 <span>🛩️ ${logsCount} flight${logsCount !== 1 ? 's' : ''}</span>
                 <span>⏱️ ${Math.round(totalTime)}m</span>
                 <span>📍 ${esc(plan.location || plan.geozone || '')}</span>
+                ${geoData.drone ? `<span>🔹 ${esc(geoData.drone)}</span>` : ''}
+                ${geoData.vlosConditions ? `<span>👁️ ${esc(geoData.vlosConditions)}</span>` : ''}
               </div>
             </div>
           `;
@@ -2652,6 +2674,8 @@
         <div class="detail-info">
           <div class="detail-info-item"><label>Date</label><span>${formatDate(plan?.date)}</span></div>
           <div class="detail-info-item"><label>Location</label><span>${locationDisplay}</span></div>
+          <div class="detail-info-item"><label>Drone</label><span>${esc(geo.drone || '-')}</span></div>
+          <div class="detail-info-item"><label>VLOS Conditions</label><span>${esc(geo.vlosConditions || '-')}</span></div>
           <div class="detail-info-item"><label>Max Altitude</label><span>${maxAltDisplay}m</span></div>
           <div class="detail-info-item"><label>Flight Logs</label><span>${planLogs.length}</span></div>
           <div class="detail-info-item"><label>Total Time</label><span>${totalMinutes.toFixed(1)}m</span></div>
@@ -3357,6 +3381,8 @@
               ${geoData.latitude || geoData.maxHeight ? `
                 <div class="form-data-row"><strong>Location:</strong> ${geoData.latitude || '-'}, ${geoData.longitude || '-'}</div>
                 <div class="form-data-row"><strong>Scenario:</strong> ${esc(geoData.operationalScenario || '-')}</div>
+                <div class="form-data-row"><strong>Drone:</strong> ${esc(geoData.drone || '-')}</div>
+                <div class="form-data-row"><strong>VLOS Conditions:</strong> ${esc(geoData.vlosConditions || '-')}</div>
                 <div class="form-data-row"><strong>Objective:</strong> ${esc(geoData.flightObjective || 'Photo & Video')}</div>
                 <div class="form-data-row"><strong>Condition:</strong> ${esc(geoData.flightCondition || 'Specific category')}</div>
                 <div class="form-data-row"><strong>Max Height:</strong> ${geoData.maxHeight || '-'}m</div>
@@ -3454,6 +3480,11 @@
       document.getElementById('geoLatitude').value = geo.latitude || '';
       document.getElementById('geoLongitude').value = geo.longitude || '';
       document.getElementById('geoScenario').value = geo.operationalScenario || '';
+      // Populate drone dropdown
+      const droneSelect = document.getElementById('geoDrone');
+      const droneOptions = drones.map(d => `<option value="${esc(d.name)}" ${geo.drone === d.name ? 'selected' : ''}>${esc(d.name)}${d.serial_number ? ' (' + esc(d.serial_number) + ')' : ''}</option>`).join('');
+      droneSelect.innerHTML = '<option value="">-- Select drone --</option>' + droneOptions;
+      document.getElementById('geoVlosConditions').value = geo.vlosConditions || '';
       document.getElementById('geoObjective').value = geo.flightObjective || 'Photo & Video';
       document.getElementById('geoCondition').value = geo.flightCondition || 'Specific category';
       document.getElementById('geoMaxHeight').value = geo.maxHeight || '';
@@ -3470,6 +3501,8 @@
         latitude: document.getElementById('geoLatitude').value,
         longitude: document.getElementById('geoLongitude').value,
         operationalScenario: document.getElementById('geoScenario').value,
+        drone: document.getElementById('geoDrone').value,
+        vlosConditions: document.getElementById('geoVlosConditions').value,
         flightObjective: document.getElementById('geoObjective').value,
         flightCondition: document.getElementById('geoCondition').value,
         maxHeight: document.getElementById('geoMaxHeight').value,
@@ -4385,6 +4418,8 @@
         latitude: centerPoint.lat,
         longitude: centerPoint.lng,
         operationalScenario: currentEvidence.flightGeographyData?.operationalScenario || '',
+        drone: currentEvidence.flightGeographyData?.drone || '',
+        vlosConditions: currentEvidence.flightGeographyData?.vlosConditions || '',
         flightObjective: 'Photo & Video',
         flightCondition: 'Specific category',
         maxHeight: height,
@@ -4613,6 +4648,8 @@
         addRow('Ground Risk Buffer', geo.groundRiskBuffer || '-');
         addRow('Max Flight Speed', geo.maxFlightSpeed || '-');
         addRow('Operational Scenario', geo.operationalScenario || '-');
+        addRow('Drone', geo.drone || '-');
+        addRow('VLOS Conditions', geo.vlosConditions || '-');
         addRow('Flight Objective', geo.flightObjective || '-');
         addRow('Flight Condition', geo.flightCondition || '-');
         addRow('Contingency Volume', geo.contingencyVolume || '-');
