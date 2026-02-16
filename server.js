@@ -975,11 +975,21 @@ async function getSoraMetadata() {
     const { data, error } = await supabase.storage
       .from('aerialdeck-files')
       .download(SORA_METADATA_PATH);
-    if (error) return {};
+    if (error) return [];
     const text = await data.text();
-    return JSON.parse(text);
+    const parsed = JSON.parse(text);
+    // Migrate from old category-keyed object to flat array if needed
+    if (Array.isArray(parsed)) return parsed;
+    // Old format: { category: [files...] } — flatten to array
+    const flat = [];
+    for (const cat of Object.keys(parsed)) {
+      for (const file of parsed[cat]) {
+        flat.push(file);
+      }
+    }
+    return flat;
   } catch (err) {
-    return {};
+    return [];
   }
 }
 
@@ -1002,18 +1012,16 @@ app.get('/api/sora-documents', requireAuth, async (req, res) => {
     res.json(metadata);
   } catch (err) {
     console.error('Error fetching SORA documents:', err);
-    res.json({});
+    res.json([]);
   }
 });
 
-// Save SORA document metadata (file already uploaded to Supabase from browser)
-app.post('/api/sora-documents/:category/metadata', requireAuth, async (req, res) => {
+// Save SORA document metadata (file already uploaded to Supabase Storage from browser)
+app.post('/api/sora-documents/metadata', requireAuth, async (req, res) => {
   try {
-    const { category } = req.params;
     const metadata = await getSoraMetadata();
-    if (!metadata[category]) metadata[category] = [];
     const fileRecord = req.body;
-    metadata[category].push(fileRecord);
+    metadata.push(fileRecord);
     await saveSoraMetadata(metadata);
     res.json(fileRecord);
   } catch (err) {
@@ -1023,17 +1031,16 @@ app.post('/api/sora-documents/:category/metadata', requireAuth, async (req, res)
 });
 
 // Replace a SORA document (update metadata for a specific file)
-app.put('/api/sora-documents/:category/:fileId/metadata', requireAuth, async (req, res) => {
+app.put('/api/sora-documents/:fileId/metadata', requireAuth, async (req, res) => {
   try {
-    const { category, fileId } = req.params;
+    const { fileId } = req.params;
     const metadata = await getSoraMetadata();
-    if (!metadata[category]) return res.status(404).json({ error: 'Category not found' });
 
-    const fileIndex = metadata[category].findIndex(f => f.id === parseInt(fileId));
+    const fileIndex = metadata.findIndex(f => f.id === parseInt(fileId));
     if (fileIndex === -1) return res.status(404).json({ error: 'File not found' });
 
     // Try to delete old file from storage
-    const oldFile = metadata[category][fileIndex];
+    const oldFile = metadata[fileIndex];
     if (oldFile.path && oldFile.path.includes('supabase')) {
       try {
         const storagePath = oldFile.path.split('/aerialdeck-files/')[1];
@@ -1041,7 +1048,7 @@ app.put('/api/sora-documents/:category/:fileId/metadata', requireAuth, async (re
       } catch (e) { console.error('Error deleting old SORA file:', e); }
     }
 
-    metadata[category][fileIndex] = req.body;
+    metadata[fileIndex] = req.body;
     await saveSoraMetadata(metadata);
     res.json(req.body);
   } catch (err) {
@@ -1051,16 +1058,15 @@ app.put('/api/sora-documents/:category/:fileId/metadata', requireAuth, async (re
 });
 
 // Delete a SORA document
-app.delete('/api/sora-documents/:category/:fileId', requireAuth, async (req, res) => {
+app.delete('/api/sora-documents/:fileId', requireAuth, async (req, res) => {
   try {
-    const { category, fileId } = req.params;
+    const { fileId } = req.params;
     const metadata = await getSoraMetadata();
-    if (!metadata[category]) return res.status(404).json({ error: 'Category not found' });
 
-    const fileIndex = metadata[category].findIndex(f => f.id === parseInt(fileId));
+    const fileIndex = metadata.findIndex(f => f.id === parseInt(fileId));
     if (fileIndex === -1) return res.status(404).json({ error: 'File not found' });
 
-    const file = metadata[category][fileIndex];
+    const file = metadata[fileIndex];
     // Delete from Supabase Storage
     if (file.path && file.path.includes('supabase')) {
       try {
@@ -1069,7 +1075,7 @@ app.delete('/api/sora-documents/:category/:fileId', requireAuth, async (req, res
       } catch (e) { console.error('Error deleting SORA file from storage:', e); }
     }
 
-    metadata[category].splice(fileIndex, 1);
+    metadata.splice(fileIndex, 1);
     await saveSoraMetadata(metadata);
     res.json({ success: true });
   } catch (err) {
