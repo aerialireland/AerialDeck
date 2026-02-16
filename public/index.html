@@ -1064,6 +1064,7 @@
           <button class="tab-btn" data-tab="maintenance">Maintenance</button>
           <button class="tab-btn" data-tab="training">Training</button>
           <button class="tab-btn" data-tab="incidents">Incidents</button>
+          <button class="tab-btn" data-tab="sora">Current SORA Documentation</button>
         </div>
 
         <div id="flightPlansTab">
@@ -1178,6 +1179,15 @@
                 <tbody id="incidentsTableBody"></tbody>
               </table>
             </div>
+          </div>
+        </div>
+
+        <div id="soraTab" style="display:none;">
+          <div class="tab-header">
+            <h3>Current SORA Documentation</h3>
+          </div>
+          <div id="soraDocumentsContainer">
+            <div class="no-data">Loading SORA documents...</div>
           </div>
         </div>
       </div>
@@ -3619,6 +3629,203 @@
       }
     });
 
+    // ============ SORA DOCUMENTATION ============
+    let soraDocuments = {};
+
+    const soraCategories = [
+      { key: 'soraApplication', title: 'SORA Application', subtitle: 'Specific Operations Risk Assessment application', accept: '.pdf,image/*' },
+      { key: 'conops', title: 'Concept of Operations (ConOps)', subtitle: 'Operational concept document', accept: '.pdf,image/*,.docx' },
+      { key: 'groundRisk', title: 'Ground Risk Assessment', subtitle: 'GRC and mitigation measures', accept: '.pdf,image/*' },
+      { key: 'airRisk', title: 'Air Risk Assessment', subtitle: 'ARC and mitigation measures', accept: '.pdf,image/*' },
+      { key: 'adjacentArea', title: 'Adjacent Area / Airspace Assessment', subtitle: 'Adjacent area and airspace analysis', accept: '.pdf,image/*' },
+      { key: 'emergencyResponse', title: 'Emergency Response Plan', subtitle: 'SORA-level ERP document', accept: '.pdf,image/*' },
+      { key: 'maintenanceProg', title: 'Maintenance Programme', subtitle: 'UAS maintenance programme documentation', accept: '.pdf,image/*,.docx' },
+      { key: 'opsManual', title: 'Operations Manual', subtitle: 'Company operations manual', accept: '.pdf,image/*,.docx' },
+      { key: 'trainingCompetency', title: 'Training & Competency Records', subtitle: 'Pilot training and competency evidence', accept: '.pdf,image/*' },
+      { key: 'insurance', title: 'Insurance Certificate', subtitle: 'Current insurance documentation', accept: '.pdf,image/*' },
+      { key: 'otherDocs', title: 'Other Documentation', subtitle: 'Any additional SORA-related documents', accept: '.pdf,image/*,.docx' }
+    ];
+
+    async function loadSoraDocuments() {
+      try {
+        const res = await safeFetch('/api/sora-documents');
+        soraDocuments = res || {};
+        renderSoraDocuments();
+      } catch (err) {
+        console.error('Error loading SORA documents:', err);
+        soraDocuments = {};
+        renderSoraDocuments();
+      }
+    }
+
+    function renderSoraDocuments() {
+      const container = document.getElementById('soraDocumentsContainer');
+      container.innerHTML = `
+        <div class="evidence-section-group">
+          <div class="evidence-bento-docs">
+            ${soraCategories.map(cat => {
+              const files = soraDocuments[cat.key] || [];
+              return `
+                <div class="evidence-bento-item">
+                  <div class="evidence-form-header">
+                    <div>
+                      <div class="evidence-category-title">${cat.title}</div>
+                      <div class="evidence-category-subtitle" style="font-size:0.75rem;color:var(--text-secondary);">${cat.subtitle}</div>
+                    </div>
+                    <label class="upload-btn">
+                      <span>+</span>
+                      <input type="file" class="upload-input" accept="${cat.accept}" onchange="uploadSoraDoc('${cat.key}', this)" multiple>
+                    </label>
+                  </div>
+                  <div class="evidence-files">
+                    ${files.length === 0
+                      ? '<div class="evidence-empty">No files</div>'
+                      : files.map(file => `
+                          <div class="evidence-file">
+                            ${file.fileType === 'image'
+                              ? `<img class="evidence-preview" src="${file.path}" alt="${esc(file.originalName)}" onclick="openImageModal('${file.path}')">`
+                              : `<div class="evidence-preview-pdf" onclick="window.open('${file.path}', '_blank')">📄</div>`}
+                            <div class="evidence-file-info">
+                              <div class="evidence-file-name" title="${esc(file.originalName)}">${esc(file.originalName)}</div>
+                              <div class="evidence-file-date">${formatDate(file.uploadDate)}</div>
+                              <div style="display:flex;gap:4px;margin-top:4px;">
+                                <a href="${file.path}" download="${esc(file.originalName)}" class="upload-btn" style="font-size:0.65rem;padding:2px 6px;" onclick="event.stopPropagation();">⬇</a>
+                                <label class="upload-btn" style="font-size:0.65rem;padding:2px 6px;cursor:pointer;">
+                                  Replace
+                                  <input type="file" class="upload-input" accept="${cat.accept}" onchange="replaceSoraDoc('${cat.key}', ${file.id}, this)">
+                                </label>
+                              </div>
+                            </div>
+                            <button class="evidence-delete" onclick="deleteSoraDoc('${cat.key}', ${file.id})">×</button>
+                          </div>
+                        `).join('')}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    async function uploadSoraDoc(category, input) {
+      const files = input.files;
+      if (!files.length) return;
+
+      for (const file of files) {
+        try {
+          const timestamp = Date.now();
+          const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const storagePath = `sora-docs/${category}/${timestamp}_${safeFilename}`;
+
+          const { data, error } = await supabaseClient.storage
+            .from('aerialdeck-files')
+            .upload(storagePath, file, { contentType: file.type, upsert: true });
+
+          if (error) { alert('Upload failed: ' + error.message); continue; }
+
+          const { data: urlData } = supabaseClient.storage
+            .from('aerialdeck-files')
+            .getPublicUrl(storagePath);
+
+          const fileRecord = {
+            id: timestamp,
+            filename: `${timestamp}_${safeFilename}`,
+            originalName: file.name,
+            uploadDate: new Date().toISOString().split('T')[0],
+            fileType: file.type.startsWith('image/') ? 'image' : 'pdf',
+            mimeType: file.type,
+            size: file.size,
+            path: urlData.publicUrl
+          };
+
+          const res = await fetch(`/api/sora-documents/${category}/metadata`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fileRecord)
+          });
+
+          if (res.ok) {
+            if (!soraDocuments[category]) soraDocuments[category] = [];
+            soraDocuments[category].push(fileRecord);
+          } else {
+            alert('Failed to save file metadata');
+          }
+        } catch (err) {
+          console.error('Error uploading SORA doc:', err);
+          alert('Error uploading file: ' + err.message);
+        }
+      }
+
+      renderSoraDocuments();
+      input.value = '';
+    }
+
+    async function replaceSoraDoc(category, fileId, input) {
+      const file = input.files[0];
+      if (!file) return;
+
+      try {
+        const timestamp = Date.now();
+        const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const storagePath = `sora-docs/${category}/${timestamp}_${safeFilename}`;
+
+        const { data, error } = await supabaseClient.storage
+          .from('aerialdeck-files')
+          .upload(storagePath, file, { contentType: file.type, upsert: true });
+
+        if (error) { alert('Upload failed: ' + error.message); return; }
+
+        const { data: urlData } = supabaseClient.storage
+          .from('aerialdeck-files')
+          .getPublicUrl(storagePath);
+
+        const fileRecord = {
+          id: timestamp,
+          filename: `${timestamp}_${safeFilename}`,
+          originalName: file.name,
+          uploadDate: new Date().toISOString().split('T')[0],
+          fileType: file.type.startsWith('image/') ? 'image' : 'pdf',
+          mimeType: file.type,
+          size: file.size,
+          path: urlData.publicUrl
+        };
+
+        const res = await fetch(`/api/sora-documents/${category}/${fileId}/metadata`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fileRecord)
+        });
+
+        if (res.ok) {
+          const idx = (soraDocuments[category] || []).findIndex(f => f.id === fileId);
+          if (idx !== -1) soraDocuments[category][idx] = fileRecord;
+          renderSoraDocuments();
+        } else {
+          alert('Failed to replace document');
+        }
+      } catch (err) {
+        console.error('Error replacing SORA doc:', err);
+        alert('Error replacing file: ' + err.message);
+      }
+
+      input.value = '';
+    }
+
+    async function deleteSoraDoc(category, fileId) {
+      if (!confirm('Are you sure you want to delete this document?')) return;
+
+      try {
+        const res = await fetch(`/api/sora-documents/${category}/${fileId}`, { method: 'DELETE' });
+        if (res.ok) {
+          soraDocuments[category] = (soraDocuments[category] || []).filter(f => f.id !== fileId);
+          renderSoraDocuments();
+        }
+      } catch (err) {
+        console.error('Error deleting SORA doc:', err);
+      }
+    }
+
     const tabMap = {
       plans: 'flightPlansTab',
       logs: 'flightLogsTab',
@@ -3626,9 +3833,11 @@
       batteries: 'batteriesTab',
       maintenance: 'maintenanceTab',
       training: 'trainingTab',
-      incidents: 'incidentsTab'
+      incidents: 'incidentsTab',
+      sora: 'soraTab'
     };
 
+    let soraLoaded = false;
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -3638,6 +3847,10 @@
           document.getElementById(id).style.display = 'none';
         });
         document.getElementById(tabMap[tab]).style.display = 'block';
+        if (tab === 'sora' && !soraLoaded) {
+          loadSoraDocuments();
+          soraLoaded = true;
+        }
       });
     });
 

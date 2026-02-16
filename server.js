@@ -965,6 +965,119 @@ app.delete('/api/flight-plans/:planId/evidence/:category/:fileId', requireAuth, 
 
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
+// ============ SORA DOCUMENTS ============
+// Company-level SORA documentation, stored in Supabase Storage as metadata JSON + files
+
+const SORA_METADATA_PATH = 'sora-docs/metadata.json';
+
+async function getSoraMetadata() {
+  try {
+    const { data, error } = await supabase.storage
+      .from('aerialdeck-files')
+      .download(SORA_METADATA_PATH);
+    if (error) return {};
+    const text = await data.text();
+    return JSON.parse(text);
+  } catch (err) {
+    return {};
+  }
+}
+
+async function saveSoraMetadata(metadata) {
+  const blob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
+  const buffer = Buffer.from(await blob.arrayBuffer());
+  const { error } = await supabase.storage
+    .from('aerialdeck-files')
+    .upload(SORA_METADATA_PATH, buffer, {
+      contentType: 'application/json',
+      upsert: true
+    });
+  if (error) throw error;
+}
+
+// Get all SORA documents
+app.get('/api/sora-documents', requireAuth, async (req, res) => {
+  try {
+    const metadata = await getSoraMetadata();
+    res.json(metadata);
+  } catch (err) {
+    console.error('Error fetching SORA documents:', err);
+    res.json({});
+  }
+});
+
+// Save SORA document metadata (file already uploaded to Supabase from browser)
+app.post('/api/sora-documents/:category/metadata', requireAuth, async (req, res) => {
+  try {
+    const { category } = req.params;
+    const metadata = await getSoraMetadata();
+    if (!metadata[category]) metadata[category] = [];
+    const fileRecord = req.body;
+    metadata[category].push(fileRecord);
+    await saveSoraMetadata(metadata);
+    res.json(fileRecord);
+  } catch (err) {
+    console.error('Error saving SORA document metadata:', err);
+    res.status(500).json({ error: 'Failed to save metadata' });
+  }
+});
+
+// Replace a SORA document (update metadata for a specific file)
+app.put('/api/sora-documents/:category/:fileId/metadata', requireAuth, async (req, res) => {
+  try {
+    const { category, fileId } = req.params;
+    const metadata = await getSoraMetadata();
+    if (!metadata[category]) return res.status(404).json({ error: 'Category not found' });
+
+    const fileIndex = metadata[category].findIndex(f => f.id === parseInt(fileId));
+    if (fileIndex === -1) return res.status(404).json({ error: 'File not found' });
+
+    // Try to delete old file from storage
+    const oldFile = metadata[category][fileIndex];
+    if (oldFile.path && oldFile.path.includes('supabase')) {
+      try {
+        const storagePath = oldFile.path.split('/aerialdeck-files/')[1];
+        if (storagePath) await supabase.storage.from('aerialdeck-files').remove([storagePath]);
+      } catch (e) { console.error('Error deleting old SORA file:', e); }
+    }
+
+    metadata[category][fileIndex] = req.body;
+    await saveSoraMetadata(metadata);
+    res.json(req.body);
+  } catch (err) {
+    console.error('Error replacing SORA document:', err);
+    res.status(500).json({ error: 'Failed to replace document' });
+  }
+});
+
+// Delete a SORA document
+app.delete('/api/sora-documents/:category/:fileId', requireAuth, async (req, res) => {
+  try {
+    const { category, fileId } = req.params;
+    const metadata = await getSoraMetadata();
+    if (!metadata[category]) return res.status(404).json({ error: 'Category not found' });
+
+    const fileIndex = metadata[category].findIndex(f => f.id === parseInt(fileId));
+    if (fileIndex === -1) return res.status(404).json({ error: 'File not found' });
+
+    const file = metadata[category][fileIndex];
+    // Delete from Supabase Storage
+    if (file.path && file.path.includes('supabase')) {
+      try {
+        const storagePath = file.path.split('/aerialdeck-files/')[1];
+        if (storagePath) await supabase.storage.from('aerialdeck-files').remove([storagePath]);
+      } catch (e) { console.error('Error deleting SORA file from storage:', e); }
+    }
+
+    metadata[category].splice(fileIndex, 1);
+    await saveSoraMetadata(metadata);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting SORA document:', err);
+    res.status(500).json({ error: 'Failed to delete document' });
+  }
+});
+
 // Serve frontend
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
