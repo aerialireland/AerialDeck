@@ -969,17 +969,19 @@ app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 // Company-level SORA documentation, stored in Supabase Storage as metadata JSON + files
 
 const SORA_METADATA_PATH = 'sora-docs/metadata.json';
+let soraMetadataCache = null;
 
 async function getSoraMetadata() {
+  if (soraMetadataCache !== null) return soraMetadataCache;
   try {
     const { data, error } = await supabase.storage
       .from('aerialdeck-files')
       .download(SORA_METADATA_PATH);
-    if (error) return [];
+    if (error) { soraMetadataCache = []; return []; }
     const text = await data.text();
     const parsed = JSON.parse(text);
     // Migrate from old category-keyed object to flat array if needed
-    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed)) { soraMetadataCache = parsed; return parsed; }
     // Old format: { category: [files...] } — flatten to array
     const flat = [];
     for (const cat of Object.keys(parsed)) {
@@ -987,15 +989,17 @@ async function getSoraMetadata() {
         flat.push(file);
       }
     }
+    soraMetadataCache = flat;
     return flat;
   } catch (err) {
+    soraMetadataCache = [];
     return [];
   }
 }
 
 async function saveSoraMetadata(metadata) {
-  const blob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
-  const buffer = Buffer.from(await blob.arrayBuffer());
+  soraMetadataCache = metadata;
+  const buffer = Buffer.from(JSON.stringify(metadata), 'utf-8');
   const { error } = await supabase.storage
     .from('aerialdeck-files')
     .upload(SORA_METADATA_PATH, buffer, {
