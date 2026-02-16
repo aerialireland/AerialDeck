@@ -2157,7 +2157,7 @@
       const items = {
         flightLogs: planLogs.length >= 1,
         crewAssignment: !!(evidence.planning?.pilotInCommand),
-        airspaceZones: (evidence.airspaceZones?.length || 0) > 0,
+        airspaceZones: !!(evidence.airspaceZones && (evidence.airspaceZones.detectedZones?.length > 0 || evidence.airspaceZones.manualZones?.length > 0)),
         operationMap: (evidence.flightGeography?.length || 0) > 0,
         flightParams: !!(evidence.flightGeographyData?.latitude && evidence.flightGeographyData?.maxHeight),
         emergencyPlan: (evidence.emergencyResponsePlan?.length || 0) > 0,
