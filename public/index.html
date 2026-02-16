@@ -2664,11 +2664,20 @@
       document.getElementById('editLogAssistantSelect').innerHTML = '<option value="">None</option>' + assistantOptions;
 
       // Populate drones dropdown - log.drone may include serial (e.g. "DJI mavic 3 pro. 1581F67...")
-      const droneOptions = drones.map(d => `<option value="${d.name}" ${log.drone && log.drone.toLowerCase().startsWith(d.name.toLowerCase()) ? 'selected' : ''}>${esc(d.name)}</option>`).join('');
+      const droneOptions = drones.filter(d => d.status === 'Active').map(d => {
+        const label = d.serial_number ? `${d.name} (${d.serial_number})` : d.name;
+        const isSelected = log.drone && log.drone.toLowerCase().startsWith(d.name.toLowerCase());
+        return `<option value="${esc(d.name)}" ${isSelected ? 'selected' : ''}>${esc(label)}</option>`;
+      }).join('');
       document.getElementById('editLogDroneSelect').innerHTML = '<option value="">Select drone...</option>' + droneOptions;
 
       // Populate batteries dropdown - log.battery may be display string (e.g. "Bat-Mavic3-A0C76F (Pink 01)")
-      const batteryOptions = batteryLogs.map(b => `<option value="${b.serial_number}" ${log.battery && log.battery.includes(b.serial_number) ? 'selected' : ''}>${esc(b.name)} (${b.serial_number})</option>`).join('');
+      // Show the stored battery name from the log if it matches, so user sees familiar labels
+      const batteryOptions = batteryLogs.filter(b => b.status === 'Active').map(b => {
+        const isSelected = log.battery && log.battery.includes(b.serial_number);
+        const label = isSelected && log.battery ? log.battery : `${b.name} (${b.serial_number})`;
+        return `<option value="${esc(b.serial_number)}" ${isSelected ? 'selected' : ''}>${esc(label)}</option>`;
+      }).join('');
       document.getElementById('editLogBatterySelect').innerHTML = '<option value="">Select battery...</option>' + batteryOptions;
 
       // Set date/time - convert UTC string to datetime-local format
@@ -2917,7 +2926,10 @@
       document.getElementById('importLogsAssistantSelect').innerHTML = '<option value="">None</option>' + pilotOptions;
 
       // Populate drones dropdown
-      const droneOptions = drones.filter(d => d.status === 'Active').map(d => `<option value="${d.name}">${d.name}</option>`).join('');
+      const droneOptions = drones.filter(d => d.status === 'Active').map(d => {
+        const label = d.serial_number ? `${d.name} (${d.serial_number})` : d.name;
+        return `<option value="${d.name}">${label}</option>`;
+      }).join('');
       document.getElementById('importLogsDroneSelect').innerHTML = '<option value="">Select drone...</option>' + droneOptions;
 
       // Populate batteries dropdown
