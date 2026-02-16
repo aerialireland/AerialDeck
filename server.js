@@ -323,6 +323,31 @@ app.post('/api/flight-logs', requireAuth, async (req, res) => {
   }
 });
 
+// Update a flight log
+app.put('/api/flight-logs/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const allowedFields = ['flight_plan_id', 'date_time_utc', 'air_time_minutes', 'pic', 'assistant', 'drone', 'battery', 'flight_mode', 'fts_activation'];
+    const updates = {};
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) updates[field] = req.body[field];
+    }
+
+    const { data, error } = await supabase
+      .from('flight_logs')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error('Error updating flight log:', err);
+    res.status(500).json({ error: 'Failed to update flight log' });
+  }
+});
+
 // Import AirData CSV
 app.post('/api/flight-logs/import-airdata', requireAuth, csvUpload.single('file'), async (req, res) => {
   try {

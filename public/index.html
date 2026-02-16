@@ -1651,6 +1651,80 @@
     </div>
   </div>
 
+  <!-- Edit Flight Log Modal -->
+  <div class="modal-overlay" id="editFlightLogModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal('editFlightLogModal')">&times;</button>
+      <h3>Edit Flight Log</h3>
+      <form id="editFlightLogForm" onsubmit="updateFlightLog(event)">
+        <input type="hidden" id="editLogId">
+        <div class="form-group">
+          <label>Flight Plan *</label>
+          <select id="editLogPlanSelect" required>
+            <option value="">Select flight plan...</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Date/Time (UTC) *</label>
+            <input type="datetime-local" id="editLogDateTime" required>
+          </div>
+          <div class="form-group">
+            <label>Duration (minutes) *</label>
+            <input type="number" id="editLogDuration" step="0.01" min="0" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Pilot in Command *</label>
+            <select id="editLogPicSelect" required>
+              <option value="">Select pilot...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Assistant</label>
+            <select id="editLogAssistantSelect">
+              <option value="">None</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Drone</label>
+            <select id="editLogDroneSelect">
+              <option value="">Select drone...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Battery Used</label>
+            <select id="editLogBatterySelect">
+              <option value="">Select battery...</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Flight Mode</label>
+            <select id="editLogFlightMode">
+              <option value="N">Normal</option>
+              <option value="C">Cine</option>
+              <option value="S">Sports</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:0.5rem;">
+              <input type="checkbox" id="editLogFTS"> FTS Activation
+            </label>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-cancel" onclick="closeModal('editFlightLogModal')">Cancel</button>
+          <button type="submit" class="btn-submit">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- New Flight Plan Modal -->
   <div class="modal-overlay" id="newFlightPlanModal">
     <div class="modal">
@@ -2479,7 +2553,7 @@
       document.getElementById('flightLogsContainer').innerHTML = planLogs.length === 0
         ? '<div class="no-data">No flight logs</div>'
         : `<table class="flight-logs-table">
-            <thead><tr><th>Date</th><th>Drone</th><th>Pilot</th><th>Duration</th><th>Mode</th><th>Battery</th><th>FTS</th></tr></thead>
+            <thead><tr><th>Date</th><th>Drone</th><th>Pilot</th><th>Duration</th><th>Mode</th><th>Battery</th><th>FTS</th><th></th></tr></thead>
             <tbody>${planLogs.map(log => {
               const mode = log.flight_mode === 'N' ? 'Normal' : log.flight_mode === 'C' ? 'Cine' : log.flight_mode === 'S' ? 'Sports' : log.flight_mode || '-';
               const isFTS = log.fts_activation === 1;
@@ -2492,6 +2566,7 @@
                 <td>${mode}</td>
                 <td>${esc(log.battery || '-')}</td>
                 <td>${isFTS ? '<span style="color:#dc2626;font-weight:600;">✓</span>' : '-'}</td>
+                <td><button onclick="showEditFlightLogForm(${log.id})" style="background:none;border:1px solid #ccc;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:12px;" title="Edit flight log">✏️</button></td>
               </tr>
             `;}).join('')}</tbody>
           </table>`;
@@ -2566,6 +2641,97 @@
           closeModal('editFlightPlanModal');
         }
       } catch (err) { console.error('Error updating flight plan:', err); }
+    }
+
+    // ============ EDIT FLIGHT LOG ============
+    let editingLogId = null;
+
+    function showEditFlightLogForm(logId) {
+      const log = flightLogs.find(l => l.id == logId);
+      if (!log) return;
+      editingLogId = logId;
+
+      document.getElementById('editLogId').value = logId;
+
+      // Populate flight plans dropdown
+      const planOptions = flightPlans.map(p => `<option value="${p.id}" ${p.id == log.flight_plan_id ? 'selected' : ''}>${esc(p.name)} (${p.date})</option>`).join('');
+      document.getElementById('editLogPlanSelect').innerHTML = '<option value="">Select flight plan...</option>' + planOptions;
+
+      // Populate pilot dropdowns
+      const pilotOptions = pilots.map(p => `<option value="${p.code}" ${p.code === log.pic ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+      document.getElementById('editLogPicSelect').innerHTML = '<option value="">Select pilot...</option>' + pilotOptions;
+      const assistantOptions = pilots.map(p => `<option value="${p.code}" ${p.code === log.assistant ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+      document.getElementById('editLogAssistantSelect').innerHTML = '<option value="">None</option>' + assistantOptions;
+
+      // Populate drones dropdown
+      const droneOptions = drones.map(d => `<option value="${d.name}" ${d.name === log.drone ? 'selected' : ''}>${esc(d.name)}</option>`).join('');
+      document.getElementById('editLogDroneSelect').innerHTML = '<option value="">Select drone...</option>' + droneOptions;
+
+      // Populate batteries dropdown
+      const batteryOptions = batteryLogs.map(b => `<option value="${b.serial_number}" ${b.serial_number === log.battery ? 'selected' : ''}>${esc(b.name)} (${b.serial_number})</option>`).join('');
+      document.getElementById('editLogBatterySelect').innerHTML = '<option value="">Select battery...</option>' + batteryOptions;
+
+      // Set date/time - convert UTC string to datetime-local format
+      if (log.date_time_utc) {
+        const dt = new Date(log.date_time_utc);
+        const local = dt.toISOString().slice(0, 16);
+        document.getElementById('editLogDateTime').value = local;
+      }
+
+      document.getElementById('editLogDuration').value = parseFloat(log.air_time_minutes) || 0;
+      document.getElementById('editLogFlightMode').value = log.flight_mode || 'N';
+      document.getElementById('editLogFTS').checked = log.fts_activation === 1;
+
+      document.getElementById('editFlightLogModal').classList.add('active');
+    }
+
+    async function updateFlightLog(e) {
+      e.preventDefault();
+      const logId = editingLogId;
+      if (!logId) return;
+
+      const updates = {
+        flight_plan_id: parseInt(document.getElementById('editLogPlanSelect').value),
+        date_time_utc: document.getElementById('editLogDateTime').value ? new Date(document.getElementById('editLogDateTime').value).toISOString() : undefined,
+        air_time_minutes: parseFloat(document.getElementById('editLogDuration').value),
+        pic: document.getElementById('editLogPicSelect').value,
+        assistant: document.getElementById('editLogAssistantSelect').value || null,
+        drone: document.getElementById('editLogDroneSelect').value || null,
+        battery: document.getElementById('editLogBatterySelect').value || null,
+        flight_mode: document.getElementById('editLogFlightMode').value,
+        fts_activation: document.getElementById('editLogFTS').checked ? 1 : 0
+      };
+
+      try {
+        const res = await fetch(`/api/flight-logs/${logId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates)
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          const idx = flightLogs.findIndex(l => l.id == logId);
+          if (idx !== -1) {
+            flightLogs[idx] = { ...flightLogs[idx], ...updated };
+          }
+          closeModal('editFlightLogModal');
+          // Re-render the current view
+          if (currentPlanId) {
+            const plan = flightPlans.find(p => p.id == currentPlanId);
+            const planLogs = flightLogs.filter(l => l.flight_plan_id == currentPlanId);
+            updateDetailHeader(plan, planLogs);
+            showPlanDetail(currentPlanId);
+          }
+          renderFlightPlans();
+          editingLogId = null;
+        } else {
+          const err = await res.json();
+          alert('Error: ' + (err.error || 'Failed to update flight log'));
+        }
+      } catch (err) {
+        console.error('Error updating flight log:', err);
+        alert('Error updating flight log. Please try again.');
+      }
     }
 
     document.getElementById('backBtn').addEventListener('click', () => {
