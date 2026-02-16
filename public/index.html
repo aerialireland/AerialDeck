@@ -2663,12 +2663,12 @@
       const assistantOptions = pilots.map(p => `<option value="${p.code}" ${p.code === log.assistant ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
       document.getElementById('editLogAssistantSelect').innerHTML = '<option value="">None</option>' + assistantOptions;
 
-      // Populate drones dropdown
-      const droneOptions = drones.map(d => `<option value="${d.name}" ${d.name === log.drone ? 'selected' : ''}>${esc(d.name)}</option>`).join('');
+      // Populate drones dropdown - log.drone may include serial (e.g. "DJI mavic 3 pro. 1581F67...")
+      const droneOptions = drones.map(d => `<option value="${d.name}" ${log.drone && log.drone.toLowerCase().startsWith(d.name.toLowerCase()) ? 'selected' : ''}>${esc(d.name)}</option>`).join('');
       document.getElementById('editLogDroneSelect').innerHTML = '<option value="">Select drone...</option>' + droneOptions;
 
-      // Populate batteries dropdown
-      const batteryOptions = batteryLogs.map(b => `<option value="${b.serial_number}" ${b.serial_number === log.battery ? 'selected' : ''}>${esc(b.name)} (${b.serial_number})</option>`).join('');
+      // Populate batteries dropdown - log.battery may be display string (e.g. "Bat-Mavic3-A0C76F (Pink 01)")
+      const batteryOptions = batteryLogs.map(b => `<option value="${b.serial_number}" ${log.battery && log.battery.includes(b.serial_number) ? 'selected' : ''}>${esc(b.name)} (${b.serial_number})</option>`).join('');
       document.getElementById('editLogBatterySelect').innerHTML = '<option value="">Select battery...</option>' + batteryOptions;
 
       // Set date/time - convert UTC string to datetime-local format
