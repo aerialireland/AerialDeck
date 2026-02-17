@@ -26,6 +26,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "multer": "^2.0.2",
+    "dji-log-parser-js": "^0.3.0",
     "sql.js": "^1.13.0"
   }
 }
