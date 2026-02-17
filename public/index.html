@@ -3034,23 +3034,32 @@
       btn.disabled = true;
 
       try {
-        const formData = new FormData(form);
-        formData.append('flight_plan_id', currentPlanId);
-
-        // Check file size (Vercel limit ~4.5MB)
         const file = form.querySelector('input[type="file"]').files[0];
-        if (file && file.size > 4.5 * 1024 * 1024) {
-          throw new Error('File too large (' + (file.size / 1024 / 1024).toFixed(1) + 'MB). Maximum is 4.5MB.');
-        }
+        if (!file) throw new Error('No file selected');
+        const pic = form.querySelector('[name="pic"]').value;
 
-        const res = await fetch('/api/flight-logs/import-dji', {
+        // Upload file to Supabase Storage first (bypasses Vercel body size limit)
+        const storagePath = `temp/${Date.now()}_${file.name}`;
+        btn.textContent = 'Uploading file...';
+        const { error: uploadError } = await supabaseClient.storage
+          .from('dji-uploads')
+          .upload(storagePath, file);
+        if (uploadError) throw new Error('Storage upload failed: ' + uploadError.message);
+
+        // Tell server to process the file from storage
+        btn.textContent = 'Processing...';
+        const res = await fetch('/api/flight-logs/import-dji-storage', {
           method: 'POST',
-          body: formData
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            flight_plan_id: currentPlanId,
+            pic: pic || 'Unknown',
+            storage_path: storagePath
+          })
         });
 
-        if (res.status === 413) throw new Error('File too large for server. Try a shorter flight record.');
         const result = await res.json();
-        if (!res.ok) throw new Error(result.error || 'Upload failed');
+        if (!res.ok) throw new Error(result.error || 'Processing failed');
 
         // Reload all data
         await loadAllData();

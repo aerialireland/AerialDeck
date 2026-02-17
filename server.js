@@ -657,6 +657,116 @@ app.post('/api/flight-logs/import-dji', requireAuth, djiUpload.single('file'), a
   }
 });
 
+// Import DJI flight record from Supabase Storage (for large files that exceed Vercel body limit)
+app.post('/api/flight-logs/import-dji-storage', requireAuth, async (req, res) => {
+  try {
+    const { flight_plan_id, pic, storage_path } = req.body;
+    if (!flight_plan_id || !storage_path) {
+      return res.status(400).json({ error: 'Flight plan ID and storage path are required' });
+    }
+
+    // Download file from Supabase Storage
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from('dji-uploads')
+      .download(storage_path);
+
+    if (downloadError) throw new Error('Failed to download from storage: ' + downloadError.message);
+
+    const buffer = Buffer.from(await fileData.arrayBuffer());
+
+    // Parse DJI flight record
+    const { metadata, gpsTrack, trackError, version } = await parseDJIFlightRecord(buffer);
+    console.log('DJI metadata (storage):', JSON.stringify({ aircraft_sn: metadata.aircraft_sn, battery_sn: metadata.battery_sn, drone: metadata.drone }));
+
+    // Detect FTS test (very short flight)
+    const isFtsTest = metadata.air_time_minutes < 0.5;
+
+    // Auto-match drone
+    let matchedDrone = null;
+    if (metadata.aircraft_sn) {
+      try {
+        const { data: dronesList } = await supabase.from('drones').select('*');
+        if (dronesList) {
+          const djiSn = metadata.aircraft_sn.toLowerCase();
+          const match = dronesList.find(d => {
+            if (!d.serial_number) return false;
+            const dbSn = d.serial_number.toLowerCase();
+            return dbSn === djiSn || dbSn.startsWith(djiSn) || djiSn.startsWith(dbSn);
+          });
+          if (match) matchedDrone = `${match.name}. ${match.serial_number}`;
+        }
+      } catch (e) { console.log('Drone auto-match failed:', e.message); }
+    }
+    if (!matchedDrone) matchedDrone = metadata.drone || 'Unknown';
+
+    // Auto-match battery
+    let matchedBattery = null;
+    if (metadata.battery_sn) {
+      try {
+        const { data: batteries } = await supabase.from('batteries').select('*');
+        if (batteries) {
+          const djiBatSn = metadata.battery_sn.toLowerCase();
+          const match = batteries.find(b => {
+            const serial = (b.serial || b.serial_number || '').toLowerCase();
+            if (!serial) return false;
+            return djiBatSn === serial || djiBatSn.endsWith(serial) || djiBatSn.includes(serial);
+          });
+          if (match) matchedBattery = match.serial;
+        }
+      } catch (e) { console.log('Battery auto-match failed:', e.message); }
+    }
+
+    // Create flight log record
+    const flightLog = {
+      flight_plan_id: parseInt(flight_plan_id),
+      date_time_utc: metadata.date_time_utc,
+      air_time_minutes: metadata.air_time_minutes,
+      pic: pic || 'Unknown',
+      assistant: null,
+      fts_activation: isFtsTest ? 1 : 0,
+      flight_mode: 'N',
+      latitude: metadata.latitude,
+      longitude: metadata.longitude,
+      drone: matchedDrone,
+      battery: matchedBattery,
+      gps_track: gpsTrack
+    };
+
+    const { data, error } = await supabase
+      .from('flight_logs')
+      .insert([flightLog])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Clean up temp file from storage
+    await supabase.storage.from('dji-uploads').remove([storage_path]);
+
+    res.json({
+      success: true,
+      flight_log: data,
+      has_gps_track: gpsTrack !== null,
+      track_points: gpsTrack ? gpsTrack.length : 0,
+      track_error: trackError,
+      summary: {
+        duration_minutes: metadata.air_time_minutes,
+        max_altitude_ft: metadata.max_altitude_ft,
+        max_speed_mph: metadata.max_speed_mph,
+        start_time: metadata.date_time_utc,
+        drone: matchedDrone,
+        aircraft_sn: metadata.aircraft_sn,
+        battery_sn: metadata.battery_sn,
+        matched_battery: matchedBattery,
+        log_version: version
+      }
+    });
+  } catch (err) {
+    console.error('Error importing DJI from storage:', err);
+    res.status(500).json({ error: 'Failed to import DJI flight record: ' + err.message });
+  }
+});
+
 // Get GPS track for a specific flight log
 app.get('/api/flight-logs/:id/gps-track', requireAuth, async (req, res) => {
   try {
