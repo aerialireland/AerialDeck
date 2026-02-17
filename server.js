@@ -563,6 +563,25 @@ app.post('/api/flight-logs/import-dji', requireAuth, djiUpload.single('file'), a
     // Detect FTS test (very short flight)
     const isFtsTest = metadata.air_time_minutes < 0.5;
 
+    // Auto-match battery by serial number from DJI file
+    let matchedBattery = battery || null;
+    if (!matchedBattery && metadata.battery_sn) {
+      try {
+        const { data: batteries } = await supabase.from('batteries').select('*');
+        if (batteries) {
+          const match = batteries.find(b =>
+            (b.serial && b.serial.toLowerCase() === metadata.battery_sn.toLowerCase()) ||
+            (b.serial_number && b.serial_number.toLowerCase() === metadata.battery_sn.toLowerCase())
+          );
+          if (match) {
+            matchedBattery = `${match.name || 'Battery'}-${match.serial}`;
+          }
+        }
+      } catch (e) {
+        console.log('Battery auto-match failed:', e.message);
+      }
+    }
+
     // Create flight log record
     const flightLog = {
       flight_plan_id: parseInt(flight_plan_id),
@@ -575,7 +594,7 @@ app.post('/api/flight-logs/import-dji', requireAuth, djiUpload.single('file'), a
       latitude: metadata.latitude,
       longitude: metadata.longitude,
       drone: drone || metadata.drone || 'Unknown',
-      battery: battery || null,
+      battery: matchedBattery,
       gps_track: gpsTrack
     };
 
@@ -600,6 +619,8 @@ app.post('/api/flight-logs/import-dji', requireAuth, djiUpload.single('file'), a
         start_time: metadata.date_time_utc,
         drone: metadata.drone,
         aircraft_sn: metadata.aircraft_sn,
+        battery_sn: metadata.battery_sn,
+        matched_battery: matchedBattery,
         log_version: version
       }
     });
