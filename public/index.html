@@ -44,54 +44,76 @@
       --border-light: #f0f4f0;
     }
 
-    /* Dark mode overrides */
+    /* Dark mode overrides — dark greys with a subtle green tint */
     body.dark {
-      --bg-primary: #1a1a2e;
-      --bg-secondary: #16162a;
-      --bg-card: #1e1e36;
-      --text-primary: #e8e8f0;
-      --text-secondary: #a8b4a0;
-      --text-muted: #7a8a7c;
+      --bg-primary: #1b1d1b;
+      --bg-secondary: #151715;
+      --bg-card: #202220;
+      --text-primary: #e2e4e2;
+      --text-secondary: #a8b0a8;
+      --text-muted: #6e786e;
       --accent: #6ba671;
-      --accent-light: #1e3a25;
+      --accent-light: #1e2e20;
       --accent-dark: #8bc895;
-      --border: #2e3a3e;
-      --border-light: #252a35;
+      --border: #2e332e;
+      --border-light: #262926;
     }
-    body.dark .login-container { background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 100%); }
+    body.dark .login-container { background: linear-gradient(135deg, #0c0e0c 0%, #1b1d1b 100%); }
     body.dark .login-box { box-shadow: 0 25px 50px rgba(0,0,0,0.5); }
-    body.dark .card-time { background: #0e2a2e; border-color: #1a4a50; }
+    body.dark .card-time { background: #1a2422; border-color: #2a3a35; }
     body.dark .card-time h3, body.dark .card-time .value { color: #67d8e8; }
     body.dark .card-time .unit { color: #4ab8c8; }
-    body.dark .fts-highlight { background: #2a1a1a !important; border-left-color: #ef4444 !important; }
-    body.dark .fts-badge { background: #3a1a1a; color: #f87171; }
-    body.dark .badge-yes { background: #1a3020; color: #6ee7a0; }
-    body.dark .badge-no, body.dark .badge-minor { background: #3a2a10; color: #fbbf24; }
-    body.dark .badge-serious { background: #3a1a1a; color: #f87171; }
-    body.dark .no-incidents { background: #1a2e1a; border-color: #2a5a2a; }
+    body.dark .fts-highlight { background: #2a1c1c !important; border-left-color: #ef4444 !important; }
+    body.dark .fts-badge { background: #2e1a1a; color: #f87171; }
+    body.dark .row-highlight-danger { background: #2a1c1c; }
+    body.dark .badge-yes { background: #1a2a1e; color: #6ee7a0; }
+    body.dark .badge-no, body.dark .badge-minor { background: #2e2610; color: #fbbf24; }
+    body.dark .badge-serious { background: #2e1a1a; color: #f87171; }
+    body.dark .no-incidents { background: #1a261a; border-color: #2a4a2a; }
     body.dark .no-incidents h4 { color: #6ee7a0; }
     body.dark .no-incidents p { color: #4ade80; }
-    body.dark .status-completed { background: #1a3020; color: #6ee7a0; }
-    body.dark .status-planned { background: #3a2a10; color: #fbbf24; }
-    body.dark .status-in-progress { background: #1a2040; color: #7daaef; }
-    body.dark .track-btn { border-color: #444; }
-    body.dark .track-btn:hover { background: #2a2a40; }
-    body.dark .badge-green { background: #1a3020; color: #6ee7a0; }
-    body.dark .badge-yellow { background: #3a2a10; color: #fbbf24; }
-    body.dark .badge-blue { background: #1a2040; color: #7daaef; }
-    body.dark .badge-red { background: #3a1a1a; color: #f87171; }
-    body.dark .badge-gray { background: #2a2a3a; color: #b0b0c0; }
-    body.dark .evidence-type-emergency { background: #2a1515; color: #f87171; }
-    body.dark .evidence-type-completed { background: #152a1a; color: #4ade80; }
-    body.dark .evidence-type-info { background: #152030; color: #60a5fa; }
-    body.dark .evidence-type-warning { background: #2a2010; color: #fb923c; }
-    body.dark .evidence-type-default { background: #252530; color: #a0a0b0; }
+    body.dark .status-completed { background: #1a2a1e; color: #6ee7a0; }
+    body.dark .status-planned { background: #2e2610; color: #fbbf24; }
+    body.dark .status-in-progress { background: #1a2230; color: #7daaef; }
+    body.dark .track-btn { border-color: #3a3e3a; }
+    body.dark .track-btn:hover { background: #2a2e2a; }
+    body.dark .badge-green { background: #1a2a1e; color: #6ee7a0; }
+    body.dark .badge-yellow { background: #2e2610; color: #fbbf24; }
+    body.dark .badge-blue { background: #1a2230; color: #7daaef; }
+    body.dark .badge-red { background: #2e1a1a; color: #f87171; }
+    body.dark .badge-gray { background: #282a28; color: #b0b4b0; }
+    body.dark .evidence-type-emergency { background: #261616; color: #f87171; }
+    body.dark .evidence-type-completed { background: #162618; color: #4ade80; }
+    body.dark .evidence-type-info { background: #161e2a; color: #60a5fa; }
+    body.dark .evidence-type-warning { background: #262010; color: #fb923c; }
+    body.dark .evidence-type-default { background: #252825; color: #a0a4a0; }
     body.dark select, body.dark input, body.dark textarea {
       background: var(--bg-card);
       color: var(--text-primary);
       border-color: var(--border);
     }
     body.dark .settings-panel { box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+    /* Dark mode: file type previews */
+    body.dark .evidence-preview-pdf { background: #261616; color: #f87171; }
+    body.dark .evidence-preview-pdf.ext-xlsx,
+    body.dark .evidence-preview-pdf.ext-xls,
+    body.dark .evidence-preview-pdf.ext-csv { background: #162618; color: #4ade80; }
+    body.dark .evidence-preview-pdf.ext-docx,
+    body.dark .evidence-preview-pdf.ext-doc { background: #161e2a; color: #60a5fa; }
+    body.dark .evidence-preview-pdf.ext-pptx,
+    body.dark .evidence-preview-pdf.ext-ppt { background: #262010; color: #fb923c; }
+    body.dark .evidence-preview-pdf.ext-txt { background: #252825; color: #a0a4a0; }
+    body.dark .evidence-preview-pdf .pdf-loading { color: #6e786e; }
+    /* Dark mode: audit/compliance progress bars */
+    body.dark .audit-progress-bar { background: rgba(255,255,255,0.1); }
+    body.dark .audit-progress-fill.red { background: linear-gradient(90deg, #b44040, #d46060); }
+    body.dark .audit-progress-fill.orange { background: linear-gradient(90deg, #b47a30, #d49a50); }
+    body.dark .compliance-mini-fill.red { background: linear-gradient(90deg, #b44040, #d46060); }
+    body.dark .compliance-mini-fill.orange { background: linear-gradient(90deg, #b47a30, #d49a50); }
+    /* Dark mode: readonly inputs */
+    body.dark input[readonly] { background: var(--bg-secondary) !important; color: var(--text-muted) !important; }
+    /* Dark mode: inline hardcoded borders */
+    body.dark .track-btn { border-color: #3a3e3a; }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -359,6 +381,7 @@
 
     .fts-highlight { border-left: 4px solid #dc2626 !important; background: #fef2f2 !important; }
     .fts-badge { background: #fee2e2; color: #991b1b; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; margin-left: 0.5rem; }
+    .row-highlight-danger { background: #fef2f2; }
 
     #flightMap { height: 100%; min-height: 280px; width: 100%; border-radius: 16px; }
 
@@ -2488,9 +2511,9 @@
                 return `
                   <div class="battery-bar">
                     <div class="bar" style="height:${heightPx}px;background:${b.color};display:flex;align-items:center;justify-content:center;">
-                      <span style="color:#333;font-size:0.65rem;font-weight:700;">${hours}h</span>
+                      <span style="color:var(--text-primary);font-size:0.65rem;font-weight:700;">${hours}h</span>
                     </div>
-                    <span class="label" style="color:#666;writing-mode:horizontal-tb;height:auto;font-size:0.5rem;margin-top:4px;">${b.code}</span>
+                    <span class="label" style="color:var(--text-muted);writing-mode:horizontal-tb;height:auto;font-size:0.5rem;margin-top:4px;">${b.code}</span>
                   </div>
                 `;
               }).join('');
@@ -2888,7 +2911,7 @@
                 ? `<td class="track-checkbox-cell"><span class="track-color-dot" id="trackDot${log.id}"></span><input type="checkbox" class="track-checkbox" data-log-id="${log.id}" onchange="toggleFlightTrack(${log.id}, this.checked)" ${activeFlightTracks.has(log.id) ? 'checked' : ''}></td>`
                 : (hasAnyTracks ? `<td class="track-checkbox-cell"><button class="track-btn" onclick="showAddGpsTrackForm(${log.id})" title="Add GPS track">📎</button></td>` : '');
               return `
-              <tr style="${isFTS ? 'background:#fef2f2;' : ''}">
+              <tr class="${isFTS ? 'row-highlight-danger' : ''}">
                 ${trackCell}
                 <td>${formatDate(log.date_time_utc)}</td>
                 <td>${esc(log.drone || '-')}</td>
@@ -3459,7 +3482,7 @@
       tbody.innerHTML = maintenanceLogs.map(log => {
         const isOverdue = log.next_scheduled && new Date(log.next_scheduled) < new Date();
         return `
-          <tr style="${isOverdue ? 'background:#fef2f2;' : ''}">
+          <tr class="${isOverdue ? 'row-highlight-danger' : ''}">
             <td>${formatDate(log.date)}</td>
             <td>${esc(log.type)}</td>
             <td><span class="badge ${log.scheduled ? 'badge-yes' : 'badge-no'}">${log.scheduled ? 'Yes' : 'No'}</span></td>
@@ -3482,7 +3505,7 @@
       tbody.innerHTML = trainingLogs.map(log => {
         const isOverdue = log.next_scheduled && new Date(log.next_scheduled) < new Date();
         return `
-          <tr style="${isOverdue ? 'background:#fef2f2;' : ''}">
+          <tr class="${isOverdue ? 'row-highlight-danger' : ''}">
             <td>${formatDate(log.date)}</td>
             <td>${esc(log.type)}</td>
             <td><span class="badge ${log.scheduled ? 'badge-yes' : 'badge-no'}">${log.scheduled ? 'Yes' : 'No'}</span></td>
