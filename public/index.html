@@ -3178,7 +3178,7 @@
         trackColorIndex++;
 
         const trackPoints = data.gps_track.map(p => [p.lat, p.lon]);
-        const layer = L.layerGroup();
+        const layer = L.featureGroup();
 
         // Flight path polyline
         const polyline = L.polyline(trackPoints, {
