@@ -2896,6 +2896,7 @@
       const planLogs = flightLogs.filter(l => l.flight_plan_id == planId);
       homeView.style.display = 'none';
       detailView.classList.add('active');
+      window.scrollTo(0, 0);
       currentPlanId = planId; // Set current plan for evidence
       loadEvidence(planId); // Load evidence for this plan
       updateDetailHeader(plan, planLogs);
