@@ -15,6 +15,8 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <!-- Turf.js for geospatial buffer calculations -->
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <!-- Leaflet.Editable for polygon vertex editing -->
+  <script src="https://cdn.jsdelivr.net/npm/leaflet-editable@1.2.0/src/Leaflet.Editable.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- jsPDF for PDF generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1043,6 +1045,36 @@
     .legend-fg { background: #2196F3; }
     .legend-cv { background: #FF9800; }
     .legend-adj { background: rgba(158, 158, 158, 0.3); border: 2px dashed #9E9E9E; }
+    .legend-uf101 { background: transparent; border: 3px dashed #E65100; }
+
+    .uf101-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-card);
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      transition: all 0.2s;
+      margin-top: 8px;
+    }
+    .uf101-toggle-btn:hover { border-color: var(--accent); }
+    .uf101-toggle-btn.active { border-color: #E65100; background: #FFF3E0; color: #E65100; }
+    .uf101-toggle-btn .toggle-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #ccc; transition: background 0.2s;
+    }
+    .uf101-toggle-btn.active .toggle-dot { background: #E65100; }
+
+    .editable-hint {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+      font-style: italic;
+    }
     .flight-geo-actions {
       display: flex;
       gap: 0.5rem;
@@ -1409,10 +1441,15 @@
 
               <div class="flight-geo-legend">
                 <div class="legend-item"><div class="legend-color legend-cv"></div> Contingency Volume (inside)</div>
-                <div class="legend-item"><div class="legend-color legend-fg"></div> Flight Geography (KML)</div>
+                <div class="legend-item"><div class="legend-color legend-fg"></div> Flight Geography (editable)</div>
                 <div class="legend-item"><div class="legend-color legend-grb"></div> Ground Risk Buffer (outside)</div>
                 <div class="legend-item"><div class="legend-color legend-adj"></div> 5km Adjacent Area</div>
+                <div class="legend-item"><div class="legend-color legend-uf101"></div> UF101 Approval (original KML)</div>
               </div>
+              <button class="uf101-toggle-btn active" id="uf101ToggleBtn" onclick="toggleUF101Layer()" style="display:none;">
+                <span class="toggle-dot"></span> UF101 Approval
+              </button>
+              <div class="editable-hint" id="editableHint" style="display:none;">💡 Drag the blue polygon vertices to adjust the Flight Geography</div>
 
               <div class="flight-geo-actions">
                 <button class="btn-clear-geo" onclick="clearFlightGeography()">Clear</button>
@@ -4469,13 +4506,17 @@
     // ============ FLIGHT GEOGRAPHY MAP ============
     let flightGeoMap = null;
     let flightGeoLayers = {
-      flightGeography: null,
+      flightGeography: null,    // Editable polygon layer
       groundRiskBuffer: null,
       contingencyVolume: null,
-      adjacentArea: null
+      adjacentArea: null,
+      uf101Approval: null       // Original KML read-only layer
     };
-    let currentKMLData = null;
+    let currentKMLData = null;       // Editable flight geography coords (may be edited)
     let currentKMLFilename = null;
+    let uf101KMLData = null;         // Original KML coords (never changes)
+    let editablePolygon = null;      // Leaflet editable polygon reference
+    let uf101LayerVisible = true;    // Toggle state for UF101 layer
 
     // Lookup tables for buffer calculations
     const BUFFER_TABLES = {
@@ -4538,8 +4579,8 @@
       const mapContainer = document.getElementById('flightGeoMap');
       if (!mapContainer) return;
 
-      // Default center on Ireland - use preferCanvas for screenshot capability
-      flightGeoMap = L.map('flightGeoMap', { preferCanvas: true }).setView([53.5, -7.5], 7);
+      // Default center on Ireland - use preferCanvas for screenshot, editable for polygon editing
+      flightGeoMap = L.map('flightGeoMap', { preferCanvas: true, editable: true }).setView([53.5, -7.5], 7);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap',
@@ -4568,8 +4609,17 @@
           // Extract coordinates from KML
           const coords = extractKMLCoordinates(kml);
           if (coords && coords.length > 0) {
-            currentKMLData = coords;
+            // Store original KML as UF101 reference (deep copy)
+            uf101KMLData = JSON.parse(JSON.stringify(coords));
+            // Working copy for editable flight geography
+            currentKMLData = JSON.parse(JSON.stringify(coords));
+            // Draw UF101 reference layer and editable polygon
+            drawUF101Layer();
+            drawEditableFlightGeography();
             recalculateBuffers();
+            // Show toggle button and hint
+            document.getElementById('uf101ToggleBtn').style.display = 'inline-flex';
+            document.getElementById('editableHint').style.display = 'block';
           } else {
             alert('No valid coordinates found in KML file');
           }
@@ -4661,6 +4711,96 @@
       return coords;
     }
 
+    // Draw the UF101 Approval layer (original KML, read-only, dashed orange)
+    function drawUF101Layer() {
+      if (!uf101KMLData || uf101KMLData.length < 3 || !flightGeoMap) return;
+
+      // Remove existing UF101 layer
+      if (flightGeoLayers.uf101Approval) {
+        flightGeoMap.removeLayer(flightGeoLayers.uf101Approval);
+        flightGeoLayers.uf101Approval = null;
+      }
+
+      // Ensure polygon is closed
+      const coords = JSON.parse(JSON.stringify(uf101KMLData));
+      if (coords[0][0] !== coords[coords.length-1][0] || coords[0][1] !== coords[coords.length-1][1]) {
+        coords.push(coords[0]);
+      }
+
+      const uf101Poly = turf.polygon([coords]);
+      flightGeoLayers.uf101Approval = L.geoJSON(uf101Poly, {
+        style: {
+          color: '#E65100',
+          weight: 3,
+          dashArray: '8, 6',
+          fillColor: '#E65100',
+          fillOpacity: 0.05
+        }
+      }).addTo(flightGeoMap);
+
+      uf101LayerVisible = true;
+      const btn = document.getElementById('uf101ToggleBtn');
+      if (btn) btn.classList.add('active');
+    }
+
+    // Draw editable flight geography polygon
+    function drawEditableFlightGeography() {
+      if (!currentKMLData || currentKMLData.length < 3 || !flightGeoMap) return;
+
+      // Remove existing editable polygon
+      if (editablePolygon) {
+        flightGeoMap.removeLayer(editablePolygon);
+        editablePolygon = null;
+      }
+
+      // Convert [lng, lat] to [lat, lng] for Leaflet
+      const latLngs = currentKMLData.map(c => [c[1], c[0]]);
+
+      // Create editable polygon
+      editablePolygon = L.polygon(latLngs, {
+        color: '#2196F3',
+        weight: 3,
+        fillColor: '#2196F3',
+        fillOpacity: 0.35
+      }).addTo(flightGeoMap);
+
+      // Enable editing
+      editablePolygon.enableEdit();
+
+      // Listen for vertex drag events to recalculate buffers
+      editablePolygon.on('editable:vertex:dragend', function() {
+        updateCurrentKMLDataFromPolygon();
+        recalculateBuffers();
+      });
+      editablePolygon.on('editable:vertex:deleted', function() {
+        updateCurrentKMLDataFromPolygon();
+        recalculateBuffers();
+      });
+    }
+
+    // Sync edited polygon coordinates back to currentKMLData
+    function updateCurrentKMLDataFromPolygon() {
+      if (!editablePolygon) return;
+      const latLngs = editablePolygon.getLatLngs()[0]; // outer ring
+      currentKMLData = latLngs.map(ll => [ll.lng, ll.lat]); // convert back to [lng, lat]
+    }
+
+    // Toggle UF101 Approval layer visibility
+    function toggleUF101Layer() {
+      if (!flightGeoMap) return;
+      const btn = document.getElementById('uf101ToggleBtn');
+
+      if (uf101LayerVisible && flightGeoLayers.uf101Approval) {
+        flightGeoMap.removeLayer(flightGeoLayers.uf101Approval);
+        uf101LayerVisible = false;
+        btn.classList.remove('active');
+      } else if (!uf101LayerVisible && flightGeoLayers.uf101Approval) {
+        flightGeoLayers.uf101Approval.addTo(flightGeoMap);
+        uf101LayerVisible = true;
+        btn.classList.add('active');
+      }
+    }
+
     // Recalculate and draw all buffers
     function recalculateBuffers() {
       if (!currentKMLData || currentKMLData.length < 3) return;
@@ -4669,11 +4809,11 @@
       const height = document.getElementById('geoHeightSelect').value;
       const mode = document.getElementById('geoModeSelect').value;
 
-      // Clear existing layers
-      clearMapLayers();
+      // Clear buffer layers only (not editable polygon or UF101)
+      clearBufferLayers();
 
-      // Create the flight geography polygon (from KML)
-      const flightGeoCoords = currentKMLData;
+      // Create the flight geography polygon from current (possibly edited) coords
+      const flightGeoCoords = JSON.parse(JSON.stringify(currentKMLData));
 
       // Ensure polygon is closed
       if (flightGeoCoords[0][0] !== flightGeoCoords[flightGeoCoords.length-1][0] ||
@@ -4731,15 +4871,8 @@
         }).addTo(flightGeoMap);
       }
 
-      // 2. Flight Geography (the KML polygon)
-      flightGeoLayers.flightGeography = L.geoJSON(flightGeoPoly, {
-        style: {
-          color: '#2196F3',
-          weight: 3,
-          fillColor: '#2196F3',
-          fillOpacity: 0.35
-        }
-      }).addTo(flightGeoMap);
+      // 2. Flight Geography is now the editable polygon (drawn separately)
+      // No need to redraw it here - it's managed by drawEditableFlightGeography()
 
       // 1. Contingency Volume (INSIDE flight geography)
       if (contingencyM > 0) {
@@ -4762,14 +4895,14 @@
         ? flightGeoLayers.adjacentArea.getBounds()
         : (flightGeoLayers.groundRiskBuffer
           ? flightGeoLayers.groundRiskBuffer.getBounds()
-          : flightGeoLayers.flightGeography.getBounds());
+          : (editablePolygon ? editablePolygon.getBounds() : null));
 
-      flightGeoMap.fitBounds(bounds, { padding: [20, 20] });
+      if (bounds) flightGeoMap.fitBounds(bounds, { padding: [20, 20] });
     }
 
-    // Clear all map layers
-    function clearMapLayers() {
-      Object.keys(flightGeoLayers).forEach(key => {
+    // Clear buffer layers only (not editable polygon or UF101)
+    function clearBufferLayers() {
+      ['groundRiskBuffer', 'contingencyVolume', 'adjacentArea'].forEach(key => {
         if (flightGeoLayers[key]) {
           flightGeoMap.removeLayer(flightGeoLayers[key]);
           flightGeoLayers[key] = null;
@@ -4777,11 +4910,27 @@
       });
     }
 
+    // Clear all map layers including editable polygon and UF101
+    function clearMapLayers() {
+      clearBufferLayers();
+      if (flightGeoLayers.uf101Approval) {
+        flightGeoMap.removeLayer(flightGeoLayers.uf101Approval);
+        flightGeoLayers.uf101Approval = null;
+      }
+      if (editablePolygon) {
+        flightGeoMap.removeLayer(editablePolygon);
+        editablePolygon = null;
+      }
+    }
+
     // Clear flight geography
     function clearFlightGeography() {
       clearMapLayers();
       currentKMLData = null;
       currentKMLFilename = null;
+      uf101KMLData = null;
+      editablePolygon = null;
+      uf101LayerVisible = true;
       document.getElementById('kmlFilename').style.display = 'none';
       document.getElementById('kmlFileInput').value = '';
       document.getElementById('geoHeightSelect').value = '';
@@ -4789,6 +4938,8 @@
       document.getElementById('resultCV').textContent = '-';
       document.getElementById('resultGRB').textContent = '-';
       document.getElementById('resultOVV').textContent = '-';
+      document.getElementById('uf101ToggleBtn').style.display = 'none';
+      document.getElementById('editableHint').style.display = 'none';
 
       // Reset map view
       if (flightGeoMap) {
@@ -4830,7 +4981,8 @@
           // Fit to GRB bounds (outermost visible layer) with extra padding to show all circles
           const bounds = flightGeoLayers.groundRiskBuffer
             ? flightGeoLayers.groundRiskBuffer.getBounds()
-            : flightGeoLayers.flightGeography.getBounds();
+            : (editablePolygon ? editablePolygon.getBounds() : null);
+          if (!bounds) { resolve(null); return; }
           flightGeoMap.fitBounds(bounds, { padding: [100, 100] });
 
           // Wait for map to render and tiles to load
@@ -4903,7 +5055,8 @@
       const mapScreenshot = await captureMapScreenshot();
 
       const geoData = {
-        kmlCoordinates: currentKMLData,
+        kmlCoordinates: currentKMLData,           // Editable flight geography coords
+        uf101KMLCoordinates: uf101KMLData,         // Original KML coords (UF101 Approval)
         kmlFilename: currentKMLFilename,
         height: parseInt(height),
         mode: mode,
@@ -4971,6 +5124,9 @@
         currentKMLData = saved.kmlCoordinates;
         currentKMLFilename = saved.kmlFilename || 'Saved KML';
 
+        // Restore UF101 data (backward compatible: use kmlCoordinates if uf101 not saved)
+        uf101KMLData = saved.uf101KMLCoordinates || JSON.parse(JSON.stringify(saved.kmlCoordinates));
+
         document.getElementById('kmlFilename').textContent = currentKMLFilename;
         document.getElementById('kmlFilename').style.display = 'block';
 
@@ -4981,8 +5137,15 @@
           document.getElementById('geoModeSelect').value = saved.mode;
         }
 
-        // Redraw with saved settings
-        setTimeout(() => recalculateBuffers(), 100);
+        // Draw UF101 reference layer and editable polygon, then buffers
+        setTimeout(() => {
+          drawUF101Layer();
+          drawEditableFlightGeography();
+          recalculateBuffers();
+          // Show toggle button and hint
+          document.getElementById('uf101ToggleBtn').style.display = 'inline-flex';
+          document.getElementById('editableHint').style.display = 'block';
+        }, 100);
       }
     }
 
