@@ -1281,12 +1281,11 @@
             <!-- DJI Upload Tab -->
             <div id="djiUploadTab" class="upload-tab-content">
               <form id="importDJIForm" onsubmit="importDJIFlightRecord(event)">
-                <div class="form-group">
-                  <label>DJI Flight Record (.txt) *</label>
-                  <input type="file" name="file" accept=".txt" required>
-                  <small style="color:var(--text-muted);">Binary .txt file from DJI Fly app</small>
-                </div>
-                <div class="form-row">
+                <div class="form-row" style="align-items:flex-end;gap:12px;">
+                  <div class="form-group" style="flex:1;">
+                    <label>DJI Flight Record (.txt) *</label>
+                    <input type="file" name="file" accept=".txt" required>
+                  </div>
                   <div class="form-group">
                     <label>Pilot in Command *</label>
                     <select name="pic" id="djiPicSelect" required>
@@ -1294,28 +1293,8 @@
                     </select>
                   </div>
                   <div class="form-group">
-                    <label>Assistant</label>
-                    <select name="assistant" id="djiAssistantSelect">
-                      <option value="">None</option>
-                    </select>
+                    <button type="submit" class="btn-submit" id="djiUploadBtn" style="margin-bottom:2px;">Upload</button>
                   </div>
-                </div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>Drone</label>
-                    <select name="drone" id="djiDroneSelect">
-                      <option value="">Auto-detect from file</option>
-                    </select>
-                  </div>
-                  <div class="form-group">
-                    <label>Battery</label>
-                    <select name="battery" id="djiBatterySelect">
-                      <option value="">Select battery...</option>
-                    </select>
-                  </div>
-                </div>
-                <div class="form-actions">
-                  <button type="submit" class="btn-submit" id="djiUploadBtn">Upload Flight Record</button>
                 </div>
               </form>
             </div>
@@ -2991,6 +2970,7 @@
     // ============ FLIGHT RECORD UPLOAD (DJI + AirData from Plan) ============
 
     let currentFlightTrackLayer = null; // Leaflet layer group for GPS track overlay
+    let currentFlightTrackLogId = null; // Track which log's GPS track is showing
 
     function toggleUploadSection() {
       const content = document.getElementById('uploadSectionContent');
@@ -3125,6 +3105,12 @@
 
     async function showFlightTrack(logId) {
       try {
+        // Toggle off if clicking the same track
+        if (currentFlightTrackLogId === logId) {
+          clearFlightTrack();
+          return;
+        }
+
         // Clear existing track
         clearFlightTrack();
 
@@ -3177,6 +3163,9 @@
         // Scroll to map
         document.getElementById('flightGeoSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+        // Track which log is showing
+        currentFlightTrackLogId = logId;
+
         // Highlight the active track button
         document.querySelectorAll('.track-btn').forEach(b => b.classList.remove('active'));
         const activeBtn = document.querySelector(`button[onclick="showFlightTrack(${logId})"]`);
@@ -3193,6 +3182,7 @@
         flightGeoMap.removeLayer(currentFlightTrackLayer);
         currentFlightTrackLayer = null;
       }
+      currentFlightTrackLogId = null;
       document.querySelectorAll('.track-btn').forEach(b => b.classList.remove('active'));
     }
 
