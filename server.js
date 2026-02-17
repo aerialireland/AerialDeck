@@ -556,8 +556,6 @@ app.post('/api/flight-logs/import-dji', requireAuth, djiUpload.single('file'), a
       latitude: metadata.latitude,
       longitude: metadata.longitude,
       drone: drone || metadata.drone || 'Unknown',
-      max_altitude_ft: metadata.max_altitude_ft,
-      max_speed_mph: metadata.max_speed_mph,
       battery: battery || null,
       gps_track: gpsTrack
     };
