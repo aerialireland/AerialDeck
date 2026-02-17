@@ -472,6 +472,8 @@
     .track-btn { background: none; border: 1px solid #ccc; border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: 12px; }
     .track-btn:hover { background: #f0f0f0; }
     .track-btn.active { background: #ff6b35; color: white; border-color: #ff6b35; }
+    .track-checkbox-cell { width: 30px; text-align: center; }
+    .track-color-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
     .flight-logs-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); }
     .flight-logs-header h3 { color: var(--text-primary); font-weight: 600; }
     .flight-logs-table { width: 100%; border-collapse: collapse; }
@@ -2747,18 +2749,20 @@
       currentPlanId = planId; // Set current plan for evidence
       loadEvidence(planId); // Load evidence for this plan
       updateDetailHeader(plan, planLogs);
+      const hasAnyTracks = planLogs.some(l => l.has_gps_track);
       document.getElementById('flightLogsContainer').innerHTML = planLogs.length === 0
         ? '<div class="no-data">No flight logs</div>'
         : `<table class="flight-logs-table">
-            <thead><tr><th>Date</th><th>Drone</th><th>Pilot</th><th>Duration</th><th>Mode</th><th>Battery</th><th>FTS</th><th></th></tr></thead>
+            <thead><tr>${hasAnyTracks ? '<th class="track-checkbox-cell"><input type="checkbox" id="selectAllTracksCheckbox" onchange="toggleAllFlightTracks(this.checked)" title="Show/hide all tracks"></th>' : ''}<th>Date</th><th>Drone</th><th>Pilot</th><th>Duration</th><th>Mode</th><th>Battery</th><th>FTS</th><th></th></tr></thead>
             <tbody>${planLogs.map(log => {
               const mode = log.flight_mode === 'N' ? 'Normal' : log.flight_mode === 'C' ? 'Cine' : log.flight_mode === 'S' ? 'Sports' : log.flight_mode || '-';
               const isFTS = log.fts_activation === 1;
-              const trackBtn = log.has_gps_track
-                ? `<button class="track-btn" onclick="showFlightTrack(${log.id})" title="Show flight track on map">📍</button>`
-                : `<button class="track-btn" onclick="showAddGpsTrackForm(${log.id})" title="Add GPS track">📎</button>`;
+              const trackCell = log.has_gps_track
+                ? `<td class="track-checkbox-cell"><span class="track-color-dot" id="trackDot${log.id}"></span><input type="checkbox" class="track-checkbox" data-log-id="${log.id}" onchange="toggleFlightTrack(${log.id}, this.checked)" ${activeFlightTracks.has(log.id) ? 'checked' : ''}></td>`
+                : (hasAnyTracks ? `<td class="track-checkbox-cell"><button class="track-btn" onclick="showAddGpsTrackForm(${log.id})" title="Add GPS track">📎</button></td>` : '');
               return `
               <tr style="${isFTS ? 'background:#fef2f2;' : ''}">
+                ${trackCell}
                 <td>${formatDate(log.date_time_utc)}</td>
                 <td>${esc(log.drone || '-')}</td>
                 <td>${esc(log.pic || '-')}</td>
@@ -2767,7 +2771,6 @@
                 <td>${esc(log.battery || '-')}</td>
                 <td>${isFTS ? '<span style="color:#dc2626;font-weight:600;">✓</span>' : '-'}</td>
                 <td style="display:flex;gap:4px;">
-                  ${trackBtn}
                   <button onclick="showEditFlightLogForm(${log.id})" style="background:none;border:1px solid #ccc;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:12px;" title="Edit flight log">✏️</button>
                   <button onclick="deleteFlightLog(${log.id})" style="background:none;border:1px solid #e5a0a0;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:12px;" title="Delete flight log">🗑️</button>
                 </td>
@@ -2969,8 +2972,9 @@
 
     // ============ FLIGHT RECORD UPLOAD (DJI + AirData from Plan) ============
 
-    let currentFlightTrackLayer = null; // Leaflet layer group for GPS track overlay
-    let currentFlightTrackLogId = null; // Track which log's GPS track is showing
+    const activeFlightTracks = new Map(); // logId → { layer, color }
+    const trackColors = ['#ff6b35', '#3b82f6', '#22c55e', '#a855f7', '#ef4444', '#eab308', '#06b6d4', '#ec4899'];
+    let trackColorIndex = 0;
 
     function toggleUploadSection() {
       const content = document.getElementById('uploadSectionContent');
@@ -3137,87 +3141,134 @@
 
     // ============ GPS TRACK DISPLAY ON MAP ============
 
-    async function showFlightTrack(logId) {
-      try {
-        // Toggle off if clicking the same track
-        if (currentFlightTrackLogId === logId) {
-          clearFlightTrack();
-          return;
+    async function toggleFlightTrack(logId, show) {
+      if (!show) {
+        // Remove this track
+        const track = activeFlightTracks.get(logId);
+        if (track && flightGeoMap) {
+          flightGeoMap.removeLayer(track.layer);
         }
+        activeFlightTracks.delete(logId);
+        const dot = document.getElementById('trackDot' + logId);
+        if (dot) dot.style.background = '';
+        fitMapToActiveTracks();
+        updateSelectAllCheckbox();
+        return;
+      }
 
-        // Clear existing track
-        clearFlightTrack();
+      // Already showing? skip
+      if (activeFlightTracks.has(logId)) return;
 
+      try {
         const res = await fetch(`/api/flight-logs/${logId}/gps-track`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to fetch track');
 
         if (!data.gps_track || data.gps_track.length === 0) {
           alert('No GPS track data available for this flight log.');
+          const cb = document.querySelector(`.track-checkbox[data-log-id="${logId}"]`);
+          if (cb) cb.checked = false;
           return;
         }
 
-        // Ensure flight geo map is initialized
         if (!flightGeoMap) initFlightGeoMap();
 
-        // Create track polyline
-        const trackPoints = data.gps_track.map(p => [p.lat, p.lon]);
-        currentFlightTrackLayer = L.layerGroup();
+        // Pick a color
+        const color = trackColors[trackColorIndex % trackColors.length];
+        trackColorIndex++;
 
-        // Main track line
+        const trackPoints = data.gps_track.map(p => [p.lat, p.lon]);
+        const layer = L.layerGroup();
+
+        // Flight path polyline
         const polyline = L.polyline(trackPoints, {
-          color: '#ff6b35',
+          color: color,
           weight: 3,
           opacity: 0.85,
           smoothFactor: 1
         });
-        currentFlightTrackLayer.addLayer(polyline);
+        layer.addLayer(polyline);
 
-        // Start marker (green)
-        const startPoint = trackPoints[0];
-        const startMarker = L.circleMarker(startPoint, {
-          radius: 7, fillColor: '#22c55e', fillOpacity: 1,
+        // Start marker
+        const startMarker = L.circleMarker(trackPoints[0], {
+          radius: 6, fillColor: color, fillOpacity: 1,
           color: '#fff', weight: 2
         }).bindPopup('Start');
-        currentFlightTrackLayer.addLayer(startMarker);
+        layer.addLayer(startMarker);
 
-        // End marker (red)
-        const endPoint = trackPoints[trackPoints.length - 1];
-        const endMarker = L.circleMarker(endPoint, {
-          radius: 7, fillColor: '#ef4444', fillOpacity: 1,
+        // End marker (darker version)
+        const endMarker = L.circleMarker(trackPoints[trackPoints.length - 1], {
+          radius: 6, fillColor: color, fillOpacity: 0.5,
           color: '#fff', weight: 2
         }).bindPopup('End');
-        currentFlightTrackLayer.addLayer(endMarker);
+        layer.addLayer(endMarker);
 
-        currentFlightTrackLayer.addTo(flightGeoMap);
+        layer.addTo(flightGeoMap);
+        activeFlightTracks.set(logId, { layer, color });
 
-        // Fit map bounds to track
-        flightGeoMap.fitBounds(polyline.getBounds().pad(0.15));
+        // Show color dot
+        const dot = document.getElementById('trackDot' + logId);
+        if (dot) dot.style.background = color;
 
-        // Scroll to map
-        document.getElementById('flightGeoSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        fitMapToActiveTracks();
+        updateSelectAllCheckbox();
 
-        // Track which log is showing
-        currentFlightTrackLogId = logId;
-
-        // Highlight the active track button
-        document.querySelectorAll('.track-btn').forEach(b => b.classList.remove('active'));
-        const activeBtn = document.querySelector(`button[onclick="showFlightTrack(${logId})"]`);
-        if (activeBtn) activeBtn.classList.add('active');
-
+        // Scroll to map on first track
+        if (activeFlightTracks.size === 1) {
+          document.getElementById('flightGeoSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
       } catch (err) {
-        console.error('Error showing flight track:', err);
+        console.error('Error loading flight track:', err);
         alert('Error loading GPS track: ' + err.message);
+        const cb = document.querySelector(`.track-checkbox[data-log-id="${logId}"]`);
+        if (cb) cb.checked = false;
       }
     }
 
-    function clearFlightTrack() {
-      if (currentFlightTrackLayer && flightGeoMap) {
-        flightGeoMap.removeLayer(currentFlightTrackLayer);
-        currentFlightTrackLayer = null;
+    async function toggleAllFlightTracks(checked) {
+      const checkboxes = document.querySelectorAll('.track-checkbox');
+      if (!checked) {
+        // Remove all tracks
+        checkboxes.forEach(cb => cb.checked = false);
+        clearAllFlightTracks();
+        return;
       }
-      currentFlightTrackLogId = null;
-      document.querySelectorAll('.track-btn').forEach(b => b.classList.remove('active'));
+      // Add all tracks
+      for (const cb of checkboxes) {
+        if (!cb.checked) {
+          cb.checked = true;
+          const logId = parseInt(cb.dataset.logId);
+          await toggleFlightTrack(logId, true);
+        }
+      }
+    }
+
+    function clearAllFlightTracks() {
+      activeFlightTracks.forEach(({ layer }) => {
+        if (flightGeoMap) flightGeoMap.removeLayer(layer);
+      });
+      activeFlightTracks.clear();
+      trackColorIndex = 0;
+      document.querySelectorAll('.track-checkbox').forEach(cb => cb.checked = false);
+      document.querySelectorAll('.track-color-dot').forEach(d => d.style.background = '');
+      const selectAll = document.getElementById('selectAllTracksCheckbox');
+      if (selectAll) selectAll.checked = false;
+    }
+
+    function fitMapToActiveTracks() {
+      if (!flightGeoMap || activeFlightTracks.size === 0) return;
+      const layers = [];
+      activeFlightTracks.forEach(({ layer }) => layers.push(layer));
+      const group = L.featureGroup(layers);
+      flightGeoMap.fitBounds(group.getBounds().pad(0.15));
+    }
+
+    function updateSelectAllCheckbox() {
+      const selectAll = document.getElementById('selectAllTracksCheckbox');
+      if (!selectAll) return;
+      const checkboxes = document.querySelectorAll('.track-checkbox');
+      const allChecked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
+      selectAll.checked = allChecked;
     }
 
     // ============ RETROACTIVE GPS TRACK UPLOAD ============
@@ -3264,7 +3315,7 @@
     }
 
     document.getElementById('backBtn').addEventListener('click', () => {
-      clearFlightTrack(); // Clear any GPS track overlay when leaving plan detail
+      clearAllFlightTracks(); // Clear any GPS track overlays when leaving plan detail
       detailView.classList.remove('active');
       homeView.style.display = 'block';
     });
