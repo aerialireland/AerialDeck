@@ -3193,14 +3193,14 @@
         const startMarker = L.circleMarker(trackPoints[0], {
           radius: 6, fillColor: color, fillOpacity: 1,
           color: '#fff', weight: 2
-        }).bindPopup('Start');
+        });
         layer.addLayer(startMarker);
 
         // End marker (darker version)
         const endMarker = L.circleMarker(trackPoints[trackPoints.length - 1], {
           radius: 6, fillColor: color, fillOpacity: 0.5,
           color: '#fff', weight: 2
-        }).bindPopup('End');
+        });
         layer.addLayer(endMarker);
 
         layer.addTo(flightGeoMap);
@@ -3257,10 +3257,12 @@
 
     function fitMapToActiveTracks() {
       if (!flightGeoMap || activeFlightTracks.size === 0) return;
-      const layers = [];
-      activeFlightTracks.forEach(({ layer }) => layers.push(layer));
-      const group = L.featureGroup(layers);
-      flightGeoMap.fitBounds(group.getBounds().pad(0.15));
+      let bounds = null;
+      activeFlightTracks.forEach(({ layer }) => {
+        const layerBounds = layer.getBounds();
+        bounds = bounds ? bounds.extend(layerBounds) : layerBounds;
+      });
+      if (bounds && bounds.isValid()) flightGeoMap.fitBounds(bounds.pad(0.15));
     }
 
     function updateSelectAllCheckbox() {
