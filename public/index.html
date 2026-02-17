@@ -2883,7 +2883,7 @@
       try {
         const resp = await fetch(`/api/flight-logs/${logId}`, { method: 'DELETE' });
         if (!resp.ok) throw new Error((await resp.json()).error || 'Delete failed');
-        showToast('Flight log deleted');
+        // success - just refresh the view
         await loadFlightLogs();
         if (currentPlanId) showPlanDetail(currentPlanId);
       } catch (err) {
