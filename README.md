@@ -58,3 +58,5 @@ This can be deployed to any Node.js hosting platform:
 - **VPS**: Use PM2 to run: `pm2 start server.js`
 
 Remember to set all environment variables on your hosting platform.
+
+
