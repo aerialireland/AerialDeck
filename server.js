@@ -559,9 +559,29 @@ app.post('/api/flight-logs/import-dji', requireAuth, djiUpload.single('file'), a
 
     // Parse DJI flight record
     const { metadata, gpsTrack, trackError, version } = await parseDJIFlightRecord(req.file.buffer);
+    console.log('DJI metadata:', JSON.stringify({ aircraft_sn: metadata.aircraft_sn, battery_sn: metadata.battery_sn, drone: metadata.drone }));
 
     // Detect FTS test (very short flight)
     const isFtsTest = metadata.air_time_minutes < 0.5;
+
+    // Auto-match drone by aircraft serial number
+    let matchedDrone = drone || null;
+    if (!matchedDrone && metadata.aircraft_sn) {
+      try {
+        const { data: dronesList } = await supabase.from('drones').select('*');
+        if (dronesList) {
+          const match = dronesList.find(d =>
+            d.serial_number && d.serial_number.toLowerCase() === metadata.aircraft_sn.toLowerCase()
+          );
+          if (match) {
+            matchedDrone = `${match.name}. ${match.serial_number}`;
+          }
+        }
+      } catch (e) {
+        console.log('Drone auto-match failed:', e.message);
+      }
+    }
+    if (!matchedDrone) matchedDrone = metadata.drone || 'Unknown';
 
     // Auto-match battery by serial number from DJI file
     let matchedBattery = battery || null;
@@ -574,7 +594,7 @@ app.post('/api/flight-logs/import-dji', requireAuth, djiUpload.single('file'), a
             (b.serial_number && b.serial_number.toLowerCase() === metadata.battery_sn.toLowerCase())
           );
           if (match) {
-            matchedBattery = `${match.name || 'Battery'}-${match.serial}`;
+            matchedBattery = match.serial;
           }
         }
       } catch (e) {
@@ -593,7 +613,7 @@ app.post('/api/flight-logs/import-dji', requireAuth, djiUpload.single('file'), a
       flight_mode: 'N',
       latitude: metadata.latitude,
       longitude: metadata.longitude,
-      drone: drone || metadata.drone || 'Unknown',
+      drone: matchedDrone,
       battery: matchedBattery,
       gps_track: gpsTrack
     };
@@ -617,7 +637,7 @@ app.post('/api/flight-logs/import-dji', requireAuth, djiUpload.single('file'), a
         max_altitude_ft: metadata.max_altitude_ft,
         max_speed_mph: metadata.max_speed_mph,
         start_time: metadata.date_time_utc,
-        drone: metadata.drone,
+        drone: matchedDrone,
         aircraft_sn: metadata.aircraft_sn,
         battery_sn: metadata.battery_sn,
         matched_battery: matchedBattery,
