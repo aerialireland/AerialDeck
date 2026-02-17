@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const csv = require('csv-parse/sync');
+const { DJILog } = require('dji-log-parser-js');
 require('dotenv').config();
 
 // Import Supabase client
@@ -76,6 +77,86 @@ const csvUpload = multer({
     }
   }
 });
+
+// DJI flight record upload (.txt binary files)
+const djiUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'text/plain' || file.originalname.endsWith('.txt')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only .txt DJI flight records are allowed.'));
+    }
+  }
+});
+
+// Helper: Parse DJI flight record and extract GPS track
+async function parseDJIFlightRecord(buffer) {
+  const log = new DJILog(buffer);
+  const details = log.details;
+  const version = log.version;
+
+  // Extract metadata (always available without API key)
+  const metadata = {
+    date_time_utc: details.startTime,
+    air_time_minutes: parseFloat((details.totalTime / 60).toFixed(2)),
+    max_altitude_ft: parseFloat((details.maxHeight * 3.28084).toFixed(1)),
+    max_speed_mph: parseFloat((details.maxHorizontalSpeed * 2.23694).toFixed(1)),
+    latitude: details.latitude,
+    longitude: details.longitude,
+    drone: details.productType || 'Unknown',
+    aircraft_sn: details.aircraftSn,
+    battery_sn: details.batterySn,
+    total_distance_m: details.totalDistance,
+    max_vertical_speed_mph: parseFloat((details.maxVerticalSpeed * 2.23694).toFixed(1)),
+  };
+
+  // Try to decrypt GPS track
+  let gpsTrack = null;
+  let trackError = null;
+
+  const apiKey = process.env.DJI_API_KEY;
+  if (apiKey) {
+    try {
+      const keychains = await log.fetchKeychains(apiKey);
+      const frames = log.frames(keychains);
+
+      // Sample frames: aim for ~500 points max
+      const sampleInterval = Math.max(1, Math.floor(frames.length / 500));
+      const sampled = [];
+
+      for (let i = 0; i < frames.length; i += sampleInterval) {
+        const f = frames[i];
+        const lat = f.osd?.latitude;
+        const lon = f.osd?.longitude;
+        const alt = f.osd?.height;
+        const time = f.osd?.flyTime;
+
+        // Filter valid GPS coordinates
+        if (lat && lon && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && lat !== 0 && lon !== 0) {
+          sampled.push({
+            lat: parseFloat(lat.toFixed(6)),
+            lon: parseFloat(lon.toFixed(6)),
+            alt: parseFloat((alt || 0).toFixed(1)),
+            time: parseFloat((time || 0).toFixed(1))
+          });
+        }
+      }
+
+      if (sampled.length > 2) {
+        gpsTrack = sampled;
+      }
+    } catch (err) {
+      trackError = err.message || 'Failed to decrypt GPS track';
+      console.error('DJI GPS track decryption error:', trackError);
+    }
+  } else {
+    trackError = 'DJI_API_KEY not configured - GPS track not available';
+  }
+
+  return { metadata, gpsTrack, trackError, version };
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -294,10 +375,16 @@ app.get('/api/flight-logs', requireAuth, async (req, res) => {
     const { data, error } = await query;
     if (error) throw error;
 
-    const formattedLogs = data.map(log => ({
-      ...log,
-      flight_plan_name: log.flight_plans?.name || 'Unknown'
-    }));
+    const formattedLogs = data.map(log => {
+      const hasTrack = log.gps_track !== null && log.gps_track !== undefined
+        && Array.isArray(log.gps_track) && log.gps_track.length > 0;
+      const { gps_track, ...rest } = log; // Strip gps_track from list response to keep payloads small
+      return {
+        ...rest,
+        has_gps_track: hasTrack,
+        flight_plan_name: log.flight_plans?.name || 'Unknown'
+      };
+    });
 
     res.json(formattedLogs);
   } catch (err) {
@@ -433,6 +520,174 @@ app.post('/api/flight-logs/import-airdata', requireAuth, csvUpload.single('file'
   } catch (err) {
     console.error('Error importing AirData CSV:', err);
     res.status(500).json({ error: 'Failed to import AirData CSV: ' + err.message });
+  }
+});
+
+// ============ DJI FLIGHT RECORD IMPORT ============
+
+// Import DJI flight record (.txt binary file)
+app.post('/api/flight-logs/import-dji', requireAuth, djiUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const { flight_plan_id, pic, assistant, drone, battery } = req.body;
+    if (!flight_plan_id) {
+      return res.status(400).json({ error: 'Flight plan ID is required' });
+    }
+
+    // Parse DJI flight record
+    const { metadata, gpsTrack, trackError, version } = await parseDJIFlightRecord(req.file.buffer);
+
+    // Detect FTS test (very short flight)
+    const isFtsTest = metadata.air_time_minutes < 0.5;
+
+    // Create flight log record
+    const flightLog = {
+      flight_plan_id: parseInt(flight_plan_id),
+      date_time_utc: metadata.date_time_utc,
+      air_time_minutes: metadata.air_time_minutes,
+      pic: pic || 'Unknown',
+      assistant: assistant || null,
+      fts_activation: isFtsTest ? 1 : 0,
+      flight_mode: 'N',
+      latitude: metadata.latitude,
+      longitude: metadata.longitude,
+      drone: drone || metadata.drone || 'Unknown',
+      max_altitude_ft: metadata.max_altitude_ft,
+      max_speed_mph: metadata.max_speed_mph,
+      battery: battery || null,
+      gps_track: gpsTrack
+    };
+
+    const { data, error } = await supabase
+      .from('flight_logs')
+      .insert([flightLog])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      flight_log: data,
+      has_gps_track: gpsTrack !== null,
+      track_points: gpsTrack ? gpsTrack.length : 0,
+      track_error: trackError,
+      summary: {
+        duration_minutes: metadata.air_time_minutes,
+        max_altitude_ft: metadata.max_altitude_ft,
+        max_speed_mph: metadata.max_speed_mph,
+        start_time: metadata.date_time_utc,
+        drone: metadata.drone,
+        aircraft_sn: metadata.aircraft_sn,
+        log_version: version
+      }
+    });
+  } catch (err) {
+    console.error('Error importing DJI flight record:', err);
+    res.status(500).json({ error: 'Failed to import DJI flight record: ' + err.message });
+  }
+});
+
+// Get GPS track for a specific flight log
+app.get('/api/flight-logs/:id/gps-track', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data, error } = await supabase
+      .from('flight_logs')
+      .select('id, gps_track')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Flight log not found' });
+
+    res.json({
+      id: data.id,
+      gps_track: data.gps_track || [],
+      has_gps_track: data.gps_track !== null && Array.isArray(data.gps_track) && data.gps_track.length > 0
+    });
+  } catch (err) {
+    console.error('Error fetching GPS track:', err);
+    res.status(500).json({ error: 'Failed to fetch GPS track' });
+  }
+});
+
+// Add GPS track to existing flight log (retroactive upload)
+app.put('/api/flight-logs/:id/gps-track', requireAuth, djiUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const { id } = req.params;
+
+    // Verify flight log exists
+    const { data: existing, error: findError } = await supabase
+      .from('flight_logs')
+      .select('id')
+      .eq('id', id)
+      .single();
+
+    if (findError || !existing) {
+      return res.status(404).json({ error: 'Flight log not found' });
+    }
+
+    // Parse DJI flight record for GPS track only
+    const { gpsTrack, trackError } = await parseDJIFlightRecord(req.file.buffer);
+
+    if (!gpsTrack) {
+      return res.status(400).json({
+        error: 'Could not extract GPS track from file',
+        detail: trackError
+      });
+    }
+
+    // Update only the gps_track column
+    const { data, error } = await supabase
+      .from('flight_logs')
+      .update({ gps_track: gpsTrack })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      id: data.id,
+      track_points: gpsTrack.length,
+      has_gps_track: true
+    });
+  } catch (err) {
+    console.error('Error adding GPS track:', err);
+    res.status(500).json({ error: 'Failed to add GPS track: ' + err.message });
+  }
+});
+
+// ============ DATABASE MIGRATION ============
+// One-time route to add gps_track column (run once, then remove)
+app.post('/api/migrate/add-gps-track', requireAuth, async (req, res) => {
+  try {
+    const { error } = await supabase.rpc('exec_sql', {
+      sql: 'ALTER TABLE flight_logs ADD COLUMN IF NOT EXISTS gps_track JSONB DEFAULT NULL;'
+    });
+
+    if (error) {
+      // If rpc doesn't exist, try direct approach - column may already exist
+      console.log('Migration note:', error.message);
+      return res.json({
+        success: true,
+        message: 'Column may already exist or needs manual addition via Supabase SQL editor: ALTER TABLE flight_logs ADD COLUMN IF NOT EXISTS gps_track JSONB DEFAULT NULL;'
+      });
+    }
+
+    res.json({ success: true, message: 'gps_track column added to flight_logs table' });
+  } catch (err) {
+    console.error('Migration error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

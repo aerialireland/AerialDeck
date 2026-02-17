@@ -443,6 +443,35 @@
       border: 1px solid var(--border);
       overflow: hidden;
     }
+    /* Upload Flight Record Section */
+    .flight-record-upload-section {
+      background: var(--bg-card);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      margin-top: 1.5rem;
+      overflow: hidden;
+    }
+    .flight-record-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); }
+    .flight-record-header h3 { color: var(--text-primary); font-weight: 600; margin: 0; }
+    .upload-tabs { display: flex; border-bottom: 1px solid var(--border); }
+    .upload-tab-btn {
+      flex: 1; padding: 0.75rem 1rem; background: none; border: none; cursor: pointer;
+      font-size: 0.85rem; font-weight: 500; color: var(--text-muted);
+      border-bottom: 2px solid transparent; transition: all 0.2s;
+    }
+    .upload-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .upload-tab-btn:hover { color: var(--text-primary); }
+    .upload-tab-content { padding: 1.25rem 1.5rem; }
+    .upload-tab-content .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .upload-tab-content .form-group { margin-bottom: 0.75rem; }
+    .upload-tab-content .form-group label { display: block; font-size: 0.8rem; font-weight: 500; margin-bottom: 0.25rem; color: var(--text-secondary); }
+    .upload-tab-content .form-group select,
+    .upload-tab-content .form-group input[type="file"] { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; background: var(--bg-primary); }
+    .upload-tab-content .form-actions { margin-top: 0.5rem; display: flex; justify-content: flex-end; }
+    /* Flight track action buttons in log table */
+    .track-btn { background: none; border: 1px solid #ccc; border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: 12px; }
+    .track-btn:hover { background: #f0f0f0; }
+    .track-btn.active { background: #ff6b35; color: white; border-color: #ff6b35; }
     .flight-logs-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); }
     .flight-logs-header h3 { color: var(--text-primary); font-weight: 600; }
     .flight-logs-table { width: 100%; border-collapse: collapse; }
@@ -1237,6 +1266,104 @@
           <div id="flightLogsContainer"></div>
         </div>
 
+        <!-- Upload Flight Record Section -->
+        <div class="flight-record-upload-section">
+          <div class="flight-record-header" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleUploadSection()">
+            <h3>Upload Flight Record</h3>
+            <span id="uploadSectionToggle" style="font-size:18px;color:var(--text-muted);">▶</span>
+          </div>
+          <div id="uploadSectionContent" style="display:none;">
+            <div class="upload-tabs">
+              <button class="upload-tab-btn active" onclick="switchUploadTab('dji', this)">DJI Flight Record</button>
+              <button class="upload-tab-btn" onclick="switchUploadTab('airdata', this)">AirData CSV</button>
+            </div>
+
+            <!-- DJI Upload Tab -->
+            <div id="djiUploadTab" class="upload-tab-content">
+              <form id="importDJIForm" onsubmit="importDJIFlightRecord(event)">
+                <div class="form-group">
+                  <label>DJI Flight Record (.txt) *</label>
+                  <input type="file" name="file" accept=".txt" required>
+                  <small style="color:var(--text-muted);">Binary .txt file from DJI Fly app</small>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Pilot in Command *</label>
+                    <select name="pic" id="djiPicSelect" required>
+                      <option value="">Select pilot...</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Assistant</label>
+                    <select name="assistant" id="djiAssistantSelect">
+                      <option value="">None</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Drone</label>
+                    <select name="drone" id="djiDroneSelect">
+                      <option value="">Auto-detect from file</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Battery</label>
+                    <select name="battery" id="djiBatterySelect">
+                      <option value="">Select battery...</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn-submit" id="djiUploadBtn">Upload Flight Record</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- AirData CSV Tab -->
+            <div id="airdataUploadTab" class="upload-tab-content" style="display:none;">
+              <form id="importAirDataPlanForm" onsubmit="importAirDataFromPlan(event)">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Pilot in Command *</label>
+                    <select name="pic" id="airdataPicSelect" required>
+                      <option value="">Select pilot...</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Assistant</label>
+                    <select name="assistant" id="airdataAssistantSelect">
+                      <option value="">None</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Drone</label>
+                    <select name="drone" id="airdataDroneSelect">
+                      <option value="">Select drone...</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Battery</label>
+                    <select name="battery" id="airdataBatterySelect">
+                      <option value="">Select battery...</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>AirData CSV File *</label>
+                  <input type="file" name="file" accept=".csv" required>
+                  <small style="color:var(--text-muted);">Export from AirData as CSV</small>
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn-submit" id="airdataUploadBtn">Import Flight Log</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
         <!-- Flight Geography Map Section -->
         <div class="flight-geo-section" id="flightGeoSection">
           <div class="flight-geo-header">
@@ -1891,6 +2018,26 @@
         <div class="form-actions">
           <button type="button" class="btn-cancel" onclick="closeModal('importLogsModal')">Cancel</button>
           <button type="submit" class="btn-submit">Import Flight Log</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add GPS Track Modal (retroactive upload) -->
+  <div class="modal-overlay" id="addGpsTrackModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal('addGpsTrackModal')">&times;</button>
+      <h3>Add GPS Track to Flight Log</h3>
+      <p style="color:var(--text-muted);margin-bottom:1rem;">Upload a DJI flight record (.txt) to add the GPS flight path to this log.</p>
+      <form id="addGpsTrackForm" onsubmit="submitGpsTrack(event)">
+        <input type="hidden" name="logId" id="gpsTrackLogId">
+        <div class="form-group">
+          <label>DJI Flight Record (.txt) *</label>
+          <input type="file" name="file" accept=".txt" required>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-cancel" onclick="closeModal('addGpsTrackModal')">Cancel</button>
+          <button type="submit" class="btn-submit" id="gpsTrackUploadBtn">Upload &amp; Add Track</button>
         </div>
       </form>
     </div>
@@ -2628,6 +2775,9 @@
             <tbody>${planLogs.map(log => {
               const mode = log.flight_mode === 'N' ? 'Normal' : log.flight_mode === 'C' ? 'Cine' : log.flight_mode === 'S' ? 'Sports' : log.flight_mode || '-';
               const isFTS = log.fts_activation === 1;
+              const trackBtn = log.has_gps_track
+                ? `<button class="track-btn" onclick="showFlightTrack(${log.id})" title="Show flight track on map">📍</button>`
+                : `<button class="track-btn" onclick="showAddGpsTrackForm(${log.id})" title="Add GPS track">📎</button>`;
               return `
               <tr style="${isFTS ? 'background:#fef2f2;' : ''}">
                 <td>${formatDate(log.date_time_utc)}</td>
@@ -2637,10 +2787,15 @@
                 <td>${mode}</td>
                 <td>${esc(log.battery || '-')}</td>
                 <td>${isFTS ? '<span style="color:#dc2626;font-weight:600;">✓</span>' : '-'}</td>
-                <td><button onclick="showEditFlightLogForm(${log.id})" style="background:none;border:1px solid #ccc;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:12px;" title="Edit flight log">✏️</button></td>
+                <td style="display:flex;gap:4px;">
+                  ${trackBtn}
+                  <button onclick="showEditFlightLogForm(${log.id})" style="background:none;border:1px solid #ccc;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:12px;" title="Edit flight log">✏️</button>
+                </td>
               </tr>
             `;}).join('')}</tbody>
           </table>`;
+      // Populate upload dropdowns
+      populateUploadDropdowns();
     }
 
     // Helper function to update detail header with evidence data
@@ -2816,7 +2971,259 @@
       }
     }
 
+    // ============ FLIGHT RECORD UPLOAD (DJI + AirData from Plan) ============
+
+    let currentFlightTrackLayer = null; // Leaflet layer group for GPS track overlay
+
+    function toggleUploadSection() {
+      const content = document.getElementById('uploadSectionContent');
+      const toggle = document.getElementById('uploadSectionToggle');
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        toggle.textContent = '▼';
+      } else {
+        content.style.display = 'none';
+        toggle.textContent = '▶';
+      }
+    }
+
+    function switchUploadTab(tab, btn) {
+      document.getElementById('djiUploadTab').style.display = tab === 'dji' ? 'block' : 'none';
+      document.getElementById('airdataUploadTab').style.display = tab === 'airdata' ? 'block' : 'none';
+      document.querySelectorAll('.upload-tab-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+    }
+
+    function populateUploadDropdowns() {
+      const pilotSelects = ['djiPicSelect', 'djiAssistantSelect', 'airdataPicSelect', 'airdataAssistantSelect'];
+      const droneSelects = ['djiDroneSelect', 'airdataDroneSelect'];
+      const batterySelects = ['djiBatterySelect', 'airdataBatterySelect'];
+
+      pilotSelects.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const isAssistant = id.includes('Assistant');
+        el.innerHTML = isAssistant ? '<option value="">None</option>' : '<option value="">Select pilot...</option>';
+        (pilots || []).forEach(p => {
+          el.innerHTML += `<option value="${esc(p.code)}">${esc(p.name)} (${esc(p.code)})</option>`;
+        });
+      });
+
+      droneSelects.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.innerHTML = id.includes('dji') ? '<option value="">Auto-detect from file</option>' : '<option value="">Select drone...</option>';
+        (drones || []).filter(d => d.active !== false).forEach(d => {
+          el.innerHTML += `<option value="${esc(d.name)}">${esc(d.name)}</option>`;
+        });
+      });
+
+      batterySelects.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.innerHTML = '<option value="">Select battery...</option>';
+        (batteryLogs || []).filter(b => b.active !== false).forEach(b => {
+          el.innerHTML += `<option value="${esc(b.serial || b.serial_number)}">${esc(b.serial || b.serial_number)}</option>`;
+        });
+      });
+    }
+
+    async function importDJIFlightRecord(e) {
+      e.preventDefault();
+      const form = e.target;
+      const btn = document.getElementById('djiUploadBtn');
+      const origText = btn.textContent;
+      btn.textContent = 'Uploading...';
+      btn.disabled = true;
+
+      try {
+        const formData = new FormData(form);
+        formData.append('flight_plan_id', currentPlanId);
+
+        const res = await fetch('/api/flight-logs/import-dji', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Upload failed');
+
+        // Reload all data
+        await loadAllData();
+        showPlanDetail(currentPlanId);
+        form.reset();
+
+        // Show summary
+        let msg = `Flight record imported!\n\nDrone: ${result.summary.drone}\nDuration: ${result.summary.duration_minutes} min\nMax Alt: ${result.summary.max_altitude_ft} ft\nMax Speed: ${result.summary.max_speed_mph} mph`;
+        if (result.has_gps_track) {
+          msg += `\nGPS Track: ${result.track_points} points captured`;
+        } else if (result.track_error) {
+          msg += `\n\n⚠️ GPS track not available: ${result.track_error}`;
+        }
+        alert(msg);
+      } catch (err) {
+        console.error('Error importing DJI flight record:', err);
+        alert('Error: ' + err.message);
+      } finally {
+        btn.textContent = origText;
+        btn.disabled = false;
+      }
+    }
+
+    async function importAirDataFromPlan(e) {
+      e.preventDefault();
+      const form = e.target;
+      const btn = document.getElementById('airdataUploadBtn');
+      const origText = btn.textContent;
+      btn.textContent = 'Importing...';
+      btn.disabled = true;
+
+      try {
+        const formData = new FormData(form);
+        formData.append('flight_plan_id', currentPlanId);
+
+        const res = await fetch('/api/flight-logs/import-airdata', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Import failed');
+
+        await loadAllData();
+        showPlanDetail(currentPlanId);
+        form.reset();
+
+        alert(`AirData log imported!\n\nDuration: ${result.summary.duration_minutes} min\nMax Alt: ${result.summary.max_altitude_ft} ft\nMax Speed: ${result.summary.max_speed_mph} mph`);
+      } catch (err) {
+        console.error('Error importing AirData CSV:', err);
+        alert('Error: ' + err.message);
+      } finally {
+        btn.textContent = origText;
+        btn.disabled = false;
+      }
+    }
+
+    // ============ GPS TRACK DISPLAY ON MAP ============
+
+    async function showFlightTrack(logId) {
+      try {
+        // Clear existing track
+        clearFlightTrack();
+
+        const res = await fetch(`/api/flight-logs/${logId}/gps-track`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to fetch track');
+
+        if (!data.gps_track || data.gps_track.length === 0) {
+          alert('No GPS track data available for this flight log.');
+          return;
+        }
+
+        // Ensure flight geo map is initialized
+        if (!flightGeoMap) initFlightGeoMap();
+
+        // Create track polyline
+        const trackPoints = data.gps_track.map(p => [p.lat, p.lon]);
+        currentFlightTrackLayer = L.layerGroup();
+
+        // Main track line
+        const polyline = L.polyline(trackPoints, {
+          color: '#ff6b35',
+          weight: 3,
+          opacity: 0.85,
+          smoothFactor: 1
+        });
+        currentFlightTrackLayer.addLayer(polyline);
+
+        // Start marker (green)
+        const startPoint = trackPoints[0];
+        const startMarker = L.circleMarker(startPoint, {
+          radius: 7, fillColor: '#22c55e', fillOpacity: 1,
+          color: '#fff', weight: 2
+        }).bindPopup('Start');
+        currentFlightTrackLayer.addLayer(startMarker);
+
+        // End marker (red)
+        const endPoint = trackPoints[trackPoints.length - 1];
+        const endMarker = L.circleMarker(endPoint, {
+          radius: 7, fillColor: '#ef4444', fillOpacity: 1,
+          color: '#fff', weight: 2
+        }).bindPopup('End');
+        currentFlightTrackLayer.addLayer(endMarker);
+
+        currentFlightTrackLayer.addTo(flightGeoMap);
+
+        // Fit map bounds to track
+        flightGeoMap.fitBounds(polyline.getBounds().pad(0.15));
+
+        // Scroll to map
+        document.getElementById('flightGeoSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        // Highlight the active track button
+        document.querySelectorAll('.track-btn').forEach(b => b.classList.remove('active'));
+        const activeBtn = document.querySelector(`button[onclick="showFlightTrack(${logId})"]`);
+        if (activeBtn) activeBtn.classList.add('active');
+
+      } catch (err) {
+        console.error('Error showing flight track:', err);
+        alert('Error loading GPS track: ' + err.message);
+      }
+    }
+
+    function clearFlightTrack() {
+      if (currentFlightTrackLayer && flightGeoMap) {
+        flightGeoMap.removeLayer(currentFlightTrackLayer);
+        currentFlightTrackLayer = null;
+      }
+      document.querySelectorAll('.track-btn').forEach(b => b.classList.remove('active'));
+    }
+
+    // ============ RETROACTIVE GPS TRACK UPLOAD ============
+
+    function showAddGpsTrackForm(logId) {
+      document.getElementById('gpsTrackLogId').value = logId;
+      document.getElementById('addGpsTrackForm').reset();
+      document.getElementById('gpsTrackLogId').value = logId; // reset clears hidden too
+      document.getElementById('addGpsTrackModal').classList.add('active');
+    }
+
+    async function submitGpsTrack(e) {
+      e.preventDefault();
+      const form = e.target;
+      const logId = document.getElementById('gpsTrackLogId').value;
+      const btn = document.getElementById('gpsTrackUploadBtn');
+      const origText = btn.textContent;
+      btn.textContent = 'Uploading...';
+      btn.disabled = true;
+
+      try {
+        const formData = new FormData(form);
+
+        const res = await fetch(`/api/flight-logs/${logId}/gps-track`, {
+          method: 'PUT',
+          body: formData
+        });
+
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || result.detail || 'Upload failed');
+
+        closeModal('addGpsTrackModal');
+        await loadAllData();
+        showPlanDetail(currentPlanId);
+
+        alert(`GPS track added! ${result.track_points} points captured.`);
+      } catch (err) {
+        console.error('Error adding GPS track:', err);
+        alert('Error: ' + err.message);
+      } finally {
+        btn.textContent = origText;
+        btn.disabled = false;
+      }
+    }
+
     document.getElementById('backBtn').addEventListener('click', () => {
+      clearFlightTrack(); // Clear any GPS track overlay when leaving plan detail
       detailView.classList.remove('active');
       homeView.style.display = 'block';
     });
