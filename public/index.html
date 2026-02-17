@@ -1446,7 +1446,7 @@
                 <div class="legend-item"><div class="legend-color legend-adj"></div> 5km Adjacent Area</div>
                 <div class="legend-item"><div class="legend-color legend-uf101"></div> UF101 Approval (original KML)</div>
               </div>
-              <button class="uf101-toggle-btn active" id="uf101ToggleBtn" onclick="toggleUF101Layer()" style="display:none;">
+              <button class="uf101-toggle-btn" id="uf101ToggleBtn" onclick="toggleUF101Layer()" style="display:none;">
                 <span class="toggle-dot"></span> UF101 Approval
               </button>
               <div class="editable-hint" id="editableHint" style="display:none;">💡 Drag the blue polygon vertices to adjust the Flight Geography</div>
@@ -4736,11 +4736,11 @@
           fillColor: '#E65100',
           fillOpacity: 0.05
         }
-      }).addTo(flightGeoMap);
-
-      uf101LayerVisible = true;
+      });
+      // Don't add to map — UF101 is hidden by default
+      uf101LayerVisible = false;
       const btn = document.getElementById('uf101ToggleBtn');
-      if (btn) btn.classList.add('active');
+      if (btn) btn.classList.remove('active');
     }
 
     // Simplify polygon to reduce vertex count for editing
@@ -4802,14 +4802,14 @@
       // Enable editing
       editablePolygon.enableEdit();
 
-      // Listen for vertex drag events to recalculate buffers
+      // Listen for vertex drag events to recalculate buffers (skip fitBounds to avoid zoom)
       editablePolygon.on('editable:vertex:dragend', function() {
         updateCurrentKMLDataFromPolygon();
-        recalculateBuffers();
+        recalculateBuffers(true);
       });
       editablePolygon.on('editable:vertex:deleted', function() {
         updateCurrentKMLDataFromPolygon();
-        recalculateBuffers();
+        recalculateBuffers(true);
       });
     }
 
@@ -4836,8 +4836,8 @@
       }
     }
 
-    // Recalculate and draw all buffers
-    function recalculateBuffers() {
+    // Recalculate and draw all buffers. skipFitBounds=true when called from vertex drag
+    function recalculateBuffers(skipFitBounds = false) {
       if (!currentKMLData || currentKMLData.length < 3) return;
       if (!flightGeoMap) return;
 
@@ -4925,14 +4925,16 @@
         }
       }
 
-      // Fit map to show all layers
-      const bounds = flightGeoLayers.adjacentArea
-        ? flightGeoLayers.adjacentArea.getBounds()
-        : (flightGeoLayers.groundRiskBuffer
-          ? flightGeoLayers.groundRiskBuffer.getBounds()
-          : (editablePolygon ? editablePolygon.getBounds() : null));
+      // Fit map to show all layers (skip when dragging vertices)
+      if (!skipFitBounds) {
+        const bounds = flightGeoLayers.adjacentArea
+          ? flightGeoLayers.adjacentArea.getBounds()
+          : (flightGeoLayers.groundRiskBuffer
+            ? flightGeoLayers.groundRiskBuffer.getBounds()
+            : (editablePolygon ? editablePolygon.getBounds() : null));
 
-      if (bounds) flightGeoMap.fitBounds(bounds, { padding: [20, 20] });
+        if (bounds) flightGeoMap.fitBounds(bounds, { padding: [20, 20] });
+      }
     }
 
     // Clear buffer layers only (not editable polygon or UF101)
