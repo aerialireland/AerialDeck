@@ -3039,7 +3039,8 @@
         const pic = form.querySelector('[name="pic"]').value;
 
         // Upload file to Supabase Storage first (bypasses Vercel body size limit)
-        const storagePath = `temp/${Date.now()}_${file.name}`;
+        const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const storagePath = `temp/${Date.now()}_${safeFilename}`;
         btn.textContent = 'Uploading file...';
         const { error: uploadError } = await supabaseClient.storage
           .from('dji-uploads')
