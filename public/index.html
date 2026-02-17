@@ -4699,7 +4699,7 @@
     // Create circle coordinates around a point
     function createCircleCoords(center, radiusM) {
       const coords = [];
-      const steps = 32;
+      const steps = 8; // Fewer steps for cleaner editable polygon
       for (let i = 0; i <= steps; i++) {
         const angle = (i / steps) * 2 * Math.PI;
         const dx = radiusM * Math.cos(angle);
@@ -4743,6 +4743,36 @@
       if (btn) btn.classList.add('active');
     }
 
+    // Simplify polygon to reduce vertex count for editing
+    function simplifyPolygonCoords(coords, maxVertices = 12) {
+      if (coords.length <= maxVertices) return coords;
+
+      // Ensure closed for turf
+      const closed = [...coords];
+      if (closed[0][0] !== closed[closed.length-1][0] || closed[0][1] !== closed[closed.length-1][1]) {
+        closed.push(closed[0]);
+      }
+
+      // Progressively increase tolerance until we have <= maxVertices
+      let tolerance = 0.0001; // Start small (in km)
+      let simplified = closed;
+      for (let i = 0; i < 20; i++) {
+        const poly = turf.polygon([closed]);
+        const simpl = turf.simplify(poly, { tolerance, highQuality: true });
+        simplified = simpl.geometry.coordinates[0];
+        if (simplified.length <= maxVertices + 1) break; // +1 for closing point
+        tolerance *= 1.5;
+      }
+
+      // Remove closing point (we'll manage closure elsewhere)
+      if (simplified.length > 1 &&
+          simplified[0][0] === simplified[simplified.length-1][0] &&
+          simplified[0][1] === simplified[simplified.length-1][1]) {
+        simplified = simplified.slice(0, -1);
+      }
+      return simplified;
+    }
+
     // Draw editable flight geography polygon
     function drawEditableFlightGeography() {
       if (!currentKMLData || currentKMLData.length < 3 || !flightGeoMap) return;
@@ -4751,6 +4781,11 @@
       if (editablePolygon) {
         flightGeoMap.removeLayer(editablePolygon);
         editablePolygon = null;
+      }
+
+      // Simplify if too many vertices (keep max 12 for clean editing)
+      if (currentKMLData.length > 12) {
+        currentKMLData = simplifyPolygonCoords(currentKMLData, 12);
       }
 
       // Convert [lng, lat] to [lat, lng] for Leaflet
