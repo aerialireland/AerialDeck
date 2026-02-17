@@ -116,6 +116,58 @@
     .header h1 { font-size: 1.25rem; color: var(--accent); font-weight: 700; }
     .header-logo { height: 44px; width: auto; }
     .header-actions { display: flex; gap: 1rem; align-items: center; }
+
+    .settings-wrapper { position: relative; }
+    .settings-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 1.1rem;
+      line-height: 1;
+      transition: all 0.2s;
+    }
+    .settings-btn:hover { border-color: var(--accent); background: var(--accent-light); }
+    .settings-panel {
+      display: none;
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      min-width: 240px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+      z-index: 1000;
+    }
+    .settings-panel.open { display: block; }
+    .settings-panel-header {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .settings-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      padding: 4px 0;
+    }
+    .settings-toggle input[type="checkbox"] {
+      width: 16px; height: 16px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
     .search-box {
       display: flex;
       align-items: center;
@@ -1047,28 +1099,6 @@
     .legend-adj { background: rgba(158, 158, 158, 0.3); border: 2px dashed #9E9E9E; }
     .legend-uf101 { background: transparent; border: 3px dashed #E65100; }
 
-    .uf101-toggle-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--bg-card);
-      cursor: pointer;
-      font-size: 0.8rem;
-      color: var(--text-secondary);
-      transition: all 0.2s;
-      margin-top: 8px;
-    }
-    .uf101-toggle-btn:hover { border-color: var(--accent); }
-    .uf101-toggle-btn.active { border-color: #E65100; background: #FFF3E0; color: #E65100; }
-    .uf101-toggle-btn .toggle-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: #ccc; transition: background 0.2s;
-    }
-    .uf101-toggle-btn.active .toggle-dot { background: #E65100; }
-
     .editable-hint {
       font-size: 0.75rem;
       color: var(--text-muted);
@@ -1136,6 +1166,16 @@
     <header class="header">
       <img src="/logo.png" alt="Aerial" class="header-logo">
       <div class="header-actions">
+        <div class="settings-wrapper">
+          <button class="settings-btn" id="settingsBtn" onclick="toggleSettingsPanel()" title="Settings">⚙️</button>
+          <div class="settings-panel" id="settingsPanel">
+            <div class="settings-panel-header">Settings</div>
+            <label class="settings-toggle">
+              <input type="checkbox" id="settingUF101Visible" onchange="onSettingUF101Change(this.checked)">
+              <span>Show UF101 Approval layer</span>
+            </label>
+          </div>
+        </div>
         <div class="search-box">
           <input type="text" id="searchInput" placeholder="Search flights...">
         </div>
@@ -1446,10 +1486,7 @@
                 <div class="legend-item"><div class="legend-color legend-adj"></div> 5km Adjacent Area</div>
                 <div class="legend-item"><div class="legend-color legend-uf101"></div> UF101 Approval (original KML)</div>
               </div>
-              <button class="uf101-toggle-btn" id="uf101ToggleBtn" onclick="toggleUF101Layer()" style="display:none;">
-                <span class="toggle-dot"></span> UF101 Approval
-              </button>
-              <div class="editable-hint" id="editableHint" style="display:none;">💡 Drag the blue polygon vertices to adjust the Flight Geography</div>
+              <div class="editable-hint" id="editableHint" style="display:none;">Drag the blue polygon vertices to adjust the Flight Geography</div>
 
               <div class="flight-geo-actions">
                 <button class="btn-clear-geo" onclick="clearFlightGeography()">Clear</button>
@@ -4617,8 +4654,7 @@
             drawUF101Layer();
             drawEditableFlightGeography();
             recalculateBuffers();
-            // Show toggle button and hint
-            document.getElementById('uf101ToggleBtn').style.display = 'inline-flex';
+            // Show editing hint
             document.getElementById('editableHint').style.display = 'block';
           } else {
             alert('No valid coordinates found in KML file');
@@ -4737,10 +4773,10 @@
           fillOpacity: 0.05
         }
       });
-      // Don't add to map — UF101 is hidden by default
+      // UF101 hidden by default — user can enable via Settings
       uf101LayerVisible = false;
-      const btn = document.getElementById('uf101ToggleBtn');
-      if (btn) btn.classList.remove('active');
+      const cb = document.getElementById('settingUF101Visible');
+      if (cb) cb.checked = false;
     }
 
     // Simplify polygon to reduce vertex count for editing
@@ -4821,19 +4857,39 @@
     }
 
     // Toggle UF101 Approval layer visibility
-    function toggleUF101Layer() {
-      if (!flightGeoMap) return;
-      const btn = document.getElementById('uf101ToggleBtn');
+    // Toggle UF101 layer visibility (called internally)
+    function setUF101Visible(visible) {
+      if (!flightGeoMap || !flightGeoLayers.uf101Approval) return;
 
-      if (uf101LayerVisible && flightGeoLayers.uf101Approval) {
-        flightGeoMap.removeLayer(flightGeoLayers.uf101Approval);
-        uf101LayerVisible = false;
-        btn.classList.remove('active');
-      } else if (!uf101LayerVisible && flightGeoLayers.uf101Approval) {
+      if (visible && !uf101LayerVisible) {
         flightGeoLayers.uf101Approval.addTo(flightGeoMap);
         uf101LayerVisible = true;
-        btn.classList.add('active');
+      } else if (!visible && uf101LayerVisible) {
+        flightGeoMap.removeLayer(flightGeoLayers.uf101Approval);
+        uf101LayerVisible = false;
       }
+      // Sync settings checkbox
+      const cb = document.getElementById('settingUF101Visible');
+      if (cb) cb.checked = uf101LayerVisible;
+    }
+
+    // Settings panel toggle
+    function toggleSettingsPanel() {
+      const panel = document.getElementById('settingsPanel');
+      panel.classList.toggle('open');
+    }
+
+    // Close settings panel when clicking outside
+    document.addEventListener('click', function(e) {
+      const wrapper = document.querySelector('.settings-wrapper');
+      if (wrapper && !wrapper.contains(e.target)) {
+        document.getElementById('settingsPanel')?.classList.remove('open');
+      }
+    });
+
+    // Settings: UF101 visibility changed
+    function onSettingUF101Change(checked) {
+      setUF101Visible(checked);
     }
 
     // Recalculate and draw all buffers. skipFitBounds=true when called from vertex drag
@@ -4975,8 +5031,9 @@
       document.getElementById('resultCV').textContent = '-';
       document.getElementById('resultGRB').textContent = '-';
       document.getElementById('resultOVV').textContent = '-';
-      document.getElementById('uf101ToggleBtn').style.display = 'none';
       document.getElementById('editableHint').style.display = 'none';
+      const cb = document.getElementById('settingUF101Visible');
+      if (cb) cb.checked = false;
 
       // Reset map view
       if (flightGeoMap) {
@@ -5179,8 +5236,7 @@
           drawUF101Layer();
           drawEditableFlightGeography();
           recalculateBuffers();
-          // Show toggle button and hint
-          document.getElementById('uf101ToggleBtn').style.display = 'inline-flex';
+          // Show editing hint
           document.getElementById('editableHint').style.display = 'block';
         }, 100);
       }
