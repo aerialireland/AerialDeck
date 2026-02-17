@@ -1484,7 +1484,7 @@
                 <div class="legend-item"><div class="legend-color legend-fg"></div> Flight Geography (editable)</div>
                 <div class="legend-item"><div class="legend-color legend-grb"></div> Ground Risk Buffer (outside)</div>
                 <div class="legend-item"><div class="legend-color legend-adj"></div> 5km Adjacent Area</div>
-                <div class="legend-item"><div class="legend-color legend-uf101"></div> UF101 Approval (original KML)</div>
+                <div class="legend-item" id="legendUF101" style="display:none;"><div class="legend-color legend-uf101"></div> UF101 Approval (original KML)</div>
               </div>
               <div class="editable-hint" id="editableHint" style="display:none;">Drag the blue polygon vertices to adjust the Flight Geography</div>
 
@@ -4868,9 +4868,11 @@
         flightGeoMap.removeLayer(flightGeoLayers.uf101Approval);
         uf101LayerVisible = false;
       }
-      // Sync settings checkbox
+      // Sync settings checkbox and legend item
       const cb = document.getElementById('settingUF101Visible');
       if (cb) cb.checked = uf101LayerVisible;
+      const legend = document.getElementById('legendUF101');
+      if (legend) legend.style.display = uf101LayerVisible ? '' : 'none';
     }
 
     // Settings panel toggle
