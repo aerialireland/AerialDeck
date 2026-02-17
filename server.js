@@ -436,6 +436,25 @@ app.put('/api/flight-logs/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Delete a flight log
+app.delete('/api/flight-logs/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data, error } = await supabase
+      .from('flight_logs')
+      .delete()
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json({ success: true, deleted: data });
+  } catch (err) {
+    console.error('Error deleting flight log:', err);
+    res.status(500).json({ error: 'Failed to delete flight log' });
+  }
+});
+
 // Import AirData CSV
 app.post('/api/flight-logs/import-airdata', requireAuth, csvUpload.single('file'), async (req, res) => {
   try {

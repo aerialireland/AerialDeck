@@ -2790,6 +2790,7 @@
                 <td style="display:flex;gap:4px;">
                   ${trackBtn}
                   <button onclick="showEditFlightLogForm(${log.id})" style="background:none;border:1px solid #ccc;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:12px;" title="Edit flight log">✏️</button>
+                  <button onclick="deleteFlightLog(${log.id})" style="background:none;border:1px solid #e5a0a0;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:12px;" title="Delete flight log">🗑️</button>
                 </td>
               </tr>
             `;}).join('')}</tbody>
@@ -2873,6 +2874,22 @@
 
     // ============ EDIT FLIGHT LOG ============
     let editingLogId = null;
+
+    async function deleteFlightLog(logId) {
+      const log = flightLogs.find(l => l.id == logId);
+      if (!log) return;
+      const desc = `${formatDate(log.date_time_utc)} - ${log.drone || 'Unknown'} (${log.pic || 'Unknown'})`;
+      if (!confirm(`Delete this flight log?\n\n${desc}\n\nThis cannot be undone.`)) return;
+      try {
+        const resp = await fetch(`/api/flight-logs/${logId}`, { method: 'DELETE' });
+        if (!resp.ok) throw new Error((await resp.json()).error || 'Delete failed');
+        showToast('Flight log deleted');
+        await loadFlightLogs();
+        if (currentPlanId) showPlanDetail(currentPlanId);
+      } catch (err) {
+        alert('Error deleting flight log: ' + err.message);
+      }
+    }
 
     function showEditFlightLogForm(logId) {
       const log = flightLogs.find(l => l.id == logId);
