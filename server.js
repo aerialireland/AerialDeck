@@ -565,14 +565,18 @@ app.post('/api/flight-logs/import-dji', requireAuth, djiUpload.single('file'), a
     const isFtsTest = metadata.air_time_minutes < 0.5;
 
     // Auto-match drone by aircraft serial number
+    // DJI serial may be a prefix of the full serial (e.g. "1581F67QC234F014" vs "1581F67QC234F0140NMP")
     let matchedDrone = drone || null;
     if (!matchedDrone && metadata.aircraft_sn) {
       try {
         const { data: dronesList } = await supabase.from('drones').select('*');
         if (dronesList) {
-          const match = dronesList.find(d =>
-            d.serial_number && d.serial_number.toLowerCase() === metadata.aircraft_sn.toLowerCase()
-          );
+          const djiSn = metadata.aircraft_sn.toLowerCase();
+          const match = dronesList.find(d => {
+            if (!d.serial_number) return false;
+            const dbSn = d.serial_number.toLowerCase();
+            return dbSn === djiSn || dbSn.startsWith(djiSn) || djiSn.startsWith(dbSn);
+          });
           if (match) {
             matchedDrone = `${match.name}. ${match.serial_number}`;
           }
@@ -584,15 +588,18 @@ app.post('/api/flight-logs/import-dji', requireAuth, djiUpload.single('file'), a
     if (!matchedDrone) matchedDrone = metadata.drone || 'Unknown';
 
     // Auto-match battery by serial number from DJI file
+    // DJI battery_sn may contain extra prefix chars (e.g. "4ERKKCA5G2131A" contains "G2131A")
     let matchedBattery = battery || null;
     if (!matchedBattery && metadata.battery_sn) {
       try {
         const { data: batteries } = await supabase.from('batteries').select('*');
         if (batteries) {
-          const match = batteries.find(b =>
-            (b.serial && b.serial.toLowerCase() === metadata.battery_sn.toLowerCase()) ||
-            (b.serial_number && b.serial_number.toLowerCase() === metadata.battery_sn.toLowerCase())
-          );
+          const djiBatSn = metadata.battery_sn.toLowerCase();
+          const match = batteries.find(b => {
+            const serial = (b.serial || b.serial_number || '').toLowerCase();
+            if (!serial) return false;
+            return djiBatSn === serial || djiBatSn.endsWith(serial) || djiBatSn.includes(serial);
+          });
           if (match) {
             matchedBattery = match.serial;
           }
