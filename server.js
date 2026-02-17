@@ -601,7 +601,7 @@ app.post('/api/flight-logs/import-dji', requireAuth, djiUpload.single('file'), a
             return djiBatSn === serial || djiBatSn.endsWith(serial) || djiBatSn.includes(serial);
           });
           if (match) {
-            matchedBattery = match.serial;
+            matchedBattery = `${match.name} (${match.serial_number || match.serial})`;
           }
         }
       } catch (e) {
@@ -711,7 +711,7 @@ app.post('/api/flight-logs/import-dji-storage', requireAuth, async (req, res) =>
             if (!serial) return false;
             return djiBatSn === serial || djiBatSn.endsWith(serial) || djiBatSn.includes(serial);
           });
-          if (match) matchedBattery = match.serial;
+          if (match) matchedBattery = `${match.name} (${match.serial_number || match.serial})`;
         }
       } catch (e) { console.log('Battery auto-match failed:', e.message); }
     }
