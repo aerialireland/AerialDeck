@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const csv = require('csv-parse/sync');
-const { DJILog } = require('dji-log-parser-js');
+// dji-log-parser-js is ESM-only, loaded via dynamic import in parseDJIFlightRecord()
 require('dotenv').config();
 
 // Import Supabase client
@@ -93,6 +93,7 @@ const djiUpload = multer({
 
 // Helper: Parse DJI flight record and extract GPS track
 async function parseDJIFlightRecord(buffer) {
+  const { DJILog } = await import('dji-log-parser-js');
   const log = new DJILog(buffer);
   const details = log.details;
   const version = log.version;
