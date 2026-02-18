@@ -740,7 +740,24 @@ app.post('/api/flight-logs/import-dji-storage', requireAuth, async (req, res) =>
 
     if (error) throw error;
 
-    // Clean up temp file from storage
+    // Move temp file to permanent storage (keep original flight record)
+    const permanentPath = storage_path.replace('temp/', 'records/');
+    try {
+      // Copy to permanent location
+      const { data: fileData2, error: dlErr } = await supabase.storage.from('dji-uploads').download(storage_path);
+      if (!dlErr && fileData2) {
+        const fileBuffer = Buffer.from(await fileData2.arrayBuffer());
+        await supabase.storage.from('dji-uploads').upload(permanentPath, fileBuffer, {
+          contentType: 'text/plain',
+          upsert: true
+        });
+        // Update flight log with file path
+        await supabase.from('flight_logs').update({ dji_file_path: permanentPath }).eq('id', data.id);
+      }
+    } catch (moveErr) {
+      console.log('File preservation failed (non-critical):', moveErr.message);
+    }
+    // Clean up temp file
     await supabase.storage.from('dji-uploads').remove([storage_path]);
 
     res.json({
