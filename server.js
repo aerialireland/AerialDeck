@@ -976,6 +976,45 @@ app.get('/api/batteries', requireAuth, async (req, res) => {
   }
 });
 
+// Create battery
+app.post('/api/batteries', requireAuth, async (req, res) => {
+  try {
+    const { serial, name, drone_id, purchase_date, status, cycles, health, notes } = req.body || {};
+
+    if (!serial || typeof serial !== 'string' || !serial.trim()) {
+      return res.status(400).json({ error: 'serial is required' });
+    }
+
+    const row = {
+      serial: serial.trim(),
+      name: name && name.trim() ? name.trim() : null,
+      drone_id: drone_id ? parseInt(drone_id, 10) : null,
+      purchase_date: purchase_date || null,
+      status: status || 'Active',
+      cycles: (cycles !== undefined && cycles !== '' && cycles !== null) ? parseInt(cycles, 10) : 0,
+      health: (health !== undefined && health !== '' && health !== null) ? parseInt(health, 10) : 100,
+      notes: notes && typeof notes === 'string' ? (notes.trim() || null) : (notes || null)
+    };
+
+    const { data, error } = await supabase
+      .from('batteries')
+      .insert([row])
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(409).json({ error: 'A battery with that serial already exists' });
+      }
+      throw error;
+    }
+    res.json(data);
+  } catch (err) {
+    console.error('Error creating battery:', err);
+    res.status(500).json({ error: 'Failed to create battery' });
+  }
+});
+
 // Update battery open category hours
 app.patch('/api/batteries/:id', requireAuth, async (req, res) => {
   try {

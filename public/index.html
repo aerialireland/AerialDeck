@@ -1302,6 +1302,10 @@
         </div>
 
         <div id="batteriesTab" style="display:none;">
+          <div class="tab-header">
+            <h3>Batteries</h3>
+            <button class="add-btn" onclick="showBatteryForm()">+ Add Battery</button>
+          </div>
           <div class="data-grid" id="batteriesGrid">
             <div class="loading"><div class="spinner"></div>Loading...</div>
           </div>
@@ -1809,6 +1813,64 @@
         <div class="form-actions">
           <button type="button" class="btn-cancel" onclick="closeModal('maintenanceModal')">Cancel</button>
           <button type="submit" class="btn-submit">Save Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Battery Form Modal -->
+  <div class="modal-overlay" id="batteryModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal('batteryModal')">&times;</button>
+      <h3>Add Battery</h3>
+      <form id="batteryForm" onsubmit="submitBatteryForm(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Serial *</label>
+            <input type="text" name="serial" required placeholder="e.g. G2131A">
+          </div>
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" name="name" placeholder="e.g. DJI Mavic 3 Battery">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Drone</label>
+            <select name="drone_id" id="batteryDroneSelect">
+              <option value="">Unassigned</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select name="status">
+              <option value="Active">Active</option>
+              <option value="Retired">Retired</option>
+              <option value="In Repair">In Repair</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Purchase Date</label>
+            <input type="date" name="purchase_date">
+          </div>
+          <div class="form-group">
+            <label>Cycles</label>
+            <input type="number" name="cycles" min="0" value="0">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Health (%)</label>
+          <input type="number" name="health" min="0" max="100" value="100">
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea name="notes" placeholder="Optional notes..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-cancel" onclick="closeModal('batteryModal')">Cancel</button>
+          <button type="submit" class="btn-submit">Save Battery</button>
         </div>
       </form>
     </div>
@@ -3555,6 +3617,50 @@
     function showMaintenanceForm() {
       document.getElementById('maintenanceForm').reset();
       document.getElementById('maintenanceModal').classList.add('active');
+    }
+
+    function showBatteryForm() {
+      document.getElementById('batteryForm').reset();
+      // Populate drone dropdown from currently loaded drones
+      const sel = document.getElementById('batteryDroneSelect');
+      const active = (drones || []).filter(d => d.status === 'Active');
+      sel.innerHTML = '<option value="">Unassigned</option>' +
+        active.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
+      document.getElementById('batteryModal').classList.add('active');
+    }
+
+    async function submitBatteryForm(e) {
+      e.preventDefault();
+      const form = e.target;
+      const formData = new FormData(form);
+      const data = Object.fromEntries(formData.entries());
+      // Drop empty strings so server applies defaults / nulls
+      Object.keys(data).forEach(k => { if (data[k] === '') delete data[k]; });
+
+      try {
+        const res = await fetch('/api/batteries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (res.ok) {
+          closeModal('batteryModal');
+          // Refresh batteries list so computed stats (hours, cycles) populate
+          try {
+            const refreshed = await fetch('/api/batteries').then(r => r.json());
+            if (Array.isArray(refreshed)) {
+              batteryLogs = refreshed;
+              renderBatteries();
+            }
+          } catch (_) { /* non-critical */ }
+        } else {
+          const err = await res.json().catch(() => ({}));
+          alert('Error: ' + (err.error || 'Failed to create battery'));
+        }
+      } catch (err) {
+        console.error('Error creating battery:', err);
+        alert('Error creating battery. Please try again.');
+      }
     }
 
     function showTrainingForm() {
