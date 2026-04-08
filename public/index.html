@@ -2826,12 +2826,23 @@
           const airTimeMin = parseFloat(log.air_time_minutes) || 0;
           const mode = log.flight_mode === 'N' ? 'Normal' : log.flight_mode === 'C' ? 'Cine' : log.flight_mode === 'S' ? 'Sports' : log.flight_mode || '';
           const isFTS = log.fts_activation === 1;
+          // Build a unique, human-readable title per log: "08 Apr 2026 14:32 · Rob O'C · DJI mavic 3 pro"
+          const _d = log.date_time_utc ? new Date(log.date_time_utc) : null;
+          const _dateStr = (_d && !isNaN(_d.getTime()))
+            ? `${_d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} ${_d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}`
+            : 'Unknown date';
+          const _shortDrone = (log.drone || '').split(/[.\-]/)[0].trim();
+          const _titleParts = [_dateStr];
+          if (log.pic) _titleParts.push(log.pic);
+          if (_shortDrone) _titleParts.push(_shortDrone);
+          const _logTitle = _titleParts.join(' · ');
           return `
             <div class="flight-plan-card flight-log-card ${isFTS ? 'fts-highlight' : ''}" data-plan-id="${log.flight_plan_id || ''}">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                <h3>${esc(log.flight_plan_name || 'Flight Log')}${isFTS ? '<span class="fts-badge">FTS</span>' : ''}</h3>
+                <h3>${esc(_logTitle)}${isFTS ? '<span class="fts-badge">FTS</span>' : ''}</h3>
                 <span style="color:var(--accent);font-size:0.8rem;font-weight:500;">${airTimeMin.toFixed(1)}m</span>
               </div>
+              <div style="font-size:0.8rem;color:var(--text-secondary);margin-top:-0.25rem;margin-bottom:0.25rem;">📋 ${esc(log.flight_plan_name || 'Unknown plan')}</div>
               <div class="flight-plan-meta">
                 <span>📅 ${formatDate(log.date_time_utc)}</span>
                 <span>🚁 ${esc(log.drone || '')}</span>
