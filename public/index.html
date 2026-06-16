@@ -527,6 +527,35 @@
     .flight-plan-card:hover { background: var(--accent-light); transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.10); border-color: var(--accent); }
     .flight-plan-card h3 { color: var(--text-primary); font-size: 1rem; margin-bottom: 0.35rem; font-weight: 600; }
     .flight-plan-meta { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem; }
+    .plan-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.6rem; }
+    .plan-card-header h3 { flex: 1; min-width: 0; }
+    .plan-card-thumb-wrap { position: relative; flex-shrink: 0; }
+    .plan-card-thumb {
+      width: 84px;
+      height: 56px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      display: block;
+    }
+    .plan-card-thumb-empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-primary);
+      color: var(--text-muted);
+      font-size: 1.3rem;
+    }
+    .plan-card-thumb-wrap .delete-plan-btn {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      background: rgba(255, 255, 255, 0.85);
+      border-radius: 6px;
+      line-height: 1;
+      padding: 0.1rem 0.2rem;
+    }
+    .plan-card-footer { margin-top: auto; display: flex; justify-content: flex-end; padding-top: 0.6rem; }
     .delete-plan-btn {
       background: none;
       border: none;
@@ -2878,10 +2907,12 @@
           const geoData = planEvidence.flightGeographyData || {};
           return `
             <div class="flight-plan-card" data-id="${plan.id}">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+              <div class="plan-card-header">
                 <h3>${esc(plan.name)}</h3>
-                <div style="display:flex;align-items:center;gap:0.5rem;">
-                  ${getMiniComplianceBar(plan.id)}
+                <div class="plan-card-thumb-wrap">
+                  ${planEvidence.flightGeographyMap?.mapScreenshot
+                    ? `<img class="plan-card-thumb" src="${planEvidence.flightGeographyMap.mapScreenshot}" alt="Map">`
+                    : `<div class="plan-card-thumb plan-card-thumb-empty">🗺️</div>`}
                   <button class="delete-plan-btn" onclick="event.stopPropagation();deleteFlightPlan(${plan.id},'${esc(plan.name).replace(/'/g, "\\'")}');" title="Delete">🗑️</button>
                 </div>
               </div>
@@ -2892,6 +2923,9 @@
                 <span>📍 ${esc(plan.location || plan.geozone || '')}</span>
                 ${geoData.drone ? `<span>🔹 ${esc(geoData.drone)}</span>` : ''}
                 ${geoData.vlosConditions ? `<span>👁️ ${esc(geoData.vlosConditions)}</span>` : ''}
+              </div>
+              <div class="plan-card-footer">
+                ${getMiniComplianceBar(plan.id)}
               </div>
             </div>
           `;
