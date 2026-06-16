@@ -5490,9 +5490,9 @@
       return union;
     }
 
-    // Draw the Contingency and Ground Risk Buffer as BANDS outside each hazard.
+    // Draw the Ground Risk Buffer and Contingency as BANDS outside each hazard.
     // The hazard interior itself stays empty (transparent hole). Outward order:
-    // hazard (no fill) -> Contingency band (orange) -> GRB band (green) -> flyable.
+    // hazard (no fill) -> GRB band (green) -> Contingency band (orange) -> flyable.
     function drawAvoidRings(grbM, contingencyM) {
       clearAvoidRings();
       avoidAreas.forEach(a => {
@@ -5503,30 +5503,16 @@
         }
         const poly = turf.polygon([ring]);
 
-        // Contingency is the inner band (touching the hazard); GRB is outside it.
-        const cvBuf = contingencyM > 0 ? turf.buffer(poly, contingencyM / 1000, { units: 'kilometers' }) : null;
-        const grbBuf = (grbM + contingencyM) > 0
+        // Ground Risk Buffer is the inner band (touching the hazard); Contingency is outside it.
+        const grbBuf = grbM > 0 ? turf.buffer(poly, grbM / 1000, { units: 'kilometers' }) : null;
+        const cvBuf = (grbM + contingencyM) > 0
           ? turf.buffer(poly, (grbM + contingencyM) / 1000, { units: 'kilometers' })
           : null;
 
-        // Contingency band = (hazard + contingency) minus hazard, orange (inner)
-        if (cvBuf) {
-          try {
-            const band = turf.difference(cvBuf, poly);
-            if (band) {
-              const layer = L.geoJSON(band, {
-                style: { color: '#FF9800', weight: 2, fillColor: '#FF9800', fillOpacity: 0.35 }
-              }).addTo(flightGeoMap);
-              avoidRingLayers.push(layer);
-            }
-          } catch (e) { console.warn('Contingency band failed:', e); }
-        }
-
-        // Ground Risk Buffer band = (hazard + contingency + grb) minus (hazard + contingency), green (outer)
+        // Ground Risk Buffer band = (hazard + grb) minus hazard, green (inner)
         if (grbM > 0 && grbBuf) {
           try {
-            const inner = cvBuf || poly;
-            const band = turf.difference(grbBuf, inner);
+            const band = turf.difference(grbBuf, poly);
             if (band) {
               const layer = L.geoJSON(band, {
                 style: { color: '#4CAF50', weight: 2, fillColor: '#4CAF50', fillOpacity: 0.35 }
@@ -5534,6 +5520,20 @@
               avoidRingLayers.push(layer);
             }
           } catch (e) { console.warn('GRB band failed:', e); }
+        }
+
+        // Contingency band = (hazard + grb + contingency) minus (hazard + grb), orange (outer)
+        if (contingencyM > 0 && cvBuf) {
+          try {
+            const inner = grbBuf || poly;
+            const band = turf.difference(cvBuf, inner);
+            if (band) {
+              const layer = L.geoJSON(band, {
+                style: { color: '#FF9800', weight: 2, fillColor: '#FF9800', fillOpacity: 0.35 }
+              }).addTo(flightGeoMap);
+              avoidRingLayers.push(layer);
+            }
+          } catch (e) { console.warn('Contingency band failed:', e); }
         }
 
         // Keep the editable hazard outline on top so its vertices stay clickable
