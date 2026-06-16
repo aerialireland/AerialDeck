@@ -502,8 +502,17 @@
     .btn-submit { background: var(--accent); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 500; }
     .btn-submit:hover { background: var(--accent-dark); }
 
-    /* Flight Plans List */
-    .flight-plans-grid { display: grid; gap: 0.75rem; }
+    /* Flight Plans Card Grid */
+    .flight-plans-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      align-items: stretch;
+    }
+    @media (max-width: 1200px) { .flight-plans-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 860px)  { .flight-plans-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 560px)  { .flight-plans-grid { grid-template-columns: 1fr; } }
+    .flight-plans-grid .no-data { grid-column: 1 / -1; }
     .flight-plan-card {
       background: var(--bg-card);
       border-radius: 12px;
@@ -512,10 +521,12 @@
       border: 1px solid var(--border);
       border-left: 4px solid var(--accent);
       transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
     }
-    .flight-plan-card:hover { background: var(--accent-light); transform: translateX(4px); border-color: var(--accent); }
+    .flight-plan-card:hover { background: var(--accent-light); transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.10); border-color: var(--accent); }
     .flight-plan-card h3 { color: var(--text-primary); font-size: 1rem; margin-bottom: 0.35rem; font-weight: 600; }
-    .flight-plan-meta { display: flex; gap: 1.5rem; font-size: 0.8rem; color: var(--text-muted); flex-wrap: wrap; }
+    .flight-plan-meta { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem; }
     .delete-plan-btn {
       background: none;
       border: none;
