@@ -1447,7 +1447,10 @@
       <div class="detail-view" id="detailView">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
           <a class="back-btn" id="backBtn" style="margin-bottom:0;">← Back</a>
-          <button onclick="generateFlightPlanPDF()" class="upload-btn">⬇ Download PDF</button>
+          <div style="display:flex;gap:0.5rem;align-items:center;">
+            <button onclick="exportFlightGeographyKML()" class="upload-btn">⬇ Export KML</button>
+            <button onclick="generateFlightPlanPDF()" class="upload-btn">⬇ Download PDF</button>
+          </div>
         </div>
         <div class="detail-header" id="detailHeader"></div>
         <div class="flight-logs-section">
@@ -5297,6 +5300,76 @@
         // Keep the editable hazard outline on top so its vertices stay clickable
         if (a.polygon && a.polygon.bringToFront) a.polygon.bringToFront();
       });
+    }
+
+    // Export the flight geography (with avoid-areas as holes) plus each
+    // avoid-area as its own named placemark, as a downloadable KML file.
+    function exportFlightGeographyKML() {
+      if (!currentKMLData || currentKMLData.length < 3) {
+        alert('No flight geography to export. Upload a KML first.');
+        return;
+      }
+
+      // Sync avoid-area coords from their (possibly edited) polygons
+      avoidAreas.forEach(a => {
+        if (a.polygon) {
+          const r = a.polygon.getLatLngs()[0] || [];
+          if (r.length >= 3) a.coords = r.map(ll => [ll.lng, ll.lat]);
+        }
+      });
+
+      // Convert a [lng,lat] ring to a closed KML coordinate string
+      const ringToKml = (coords) => {
+        const c = coords.slice();
+        if (c[0][0] !== c[c.length - 1][0] || c[0][1] !== c[c.length - 1][1]) c.push(c[0]);
+        return c.map(p => `${p[0]},${p[1]},0`).join(' ');
+      };
+
+      const validAvoids = avoidAreas.filter(a => a.coords && a.coords.length >= 3);
+
+      // Flight geography polygon with one inner hole per avoid-area
+      const innerBoundaries = validAvoids.map(a =>
+        `        <innerBoundaryIs><LinearRing><coordinates>${ringToKml(a.coords)}</coordinates></LinearRing></innerBoundaryIs>`
+      ).join('\n');
+
+      const fgPlacemark =
+`    <Placemark>
+      <name>Flight Geography</name>
+      <Polygon>
+        <outerBoundaryIs><LinearRing><coordinates>${ringToKml(currentKMLData)}</coordinates></LinearRing></outerBoundaryIs>
+${innerBoundaries}
+      </Polygon>
+    </Placemark>`;
+
+      // Each avoid-area as its own named placemark
+      const avoidPlacemarks = validAvoids.map((a, i) =>
+`    <Placemark>
+      <name>Avoid Area ${i + 1}</name>
+      <Polygon>
+        <outerBoundaryIs><LinearRing><coordinates>${ringToKml(a.coords)}</coordinates></LinearRing></outerBoundaryIs>
+      </Polygon>
+    </Placemark>`).join('\n');
+
+      const baseName = currentKMLFilename ? currentKMLFilename.replace(/\.km[lz]$/i, '') : 'Flight Geography';
+      const kml =
+`<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>${esc(baseName)}</name>
+${fgPlacemark}
+${avoidPlacemarks}
+  </Document>
+</kml>`;
+
+      const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${baseName.replace(/[^a-z0-9_\-]+/gi, '_') || 'flight-geography'}.kml`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
     // Toggle UF101 Approval layer visibility
