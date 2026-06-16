@@ -1560,8 +1560,8 @@
               </div>
 
               <div class="flight-geo-legend">
-                <div class="legend-item"><div class="legend-color legend-cv"></div> Contingency Volume (inside)</div>
-                <div class="legend-item"><div class="legend-color legend-fg"></div> Flight Geography (editable)</div>
+                <div class="legend-item"><div class="legend-color legend-fg"></div> Flight Geography (inside)</div>
+                <div class="legend-item"><div class="legend-color legend-cv"></div> Contingency Volume (editable)</div>
                 <div class="legend-item"><div class="legend-color legend-grb"></div> Ground Risk Buffer (outside)</div>
                 <div class="legend-item"><div class="legend-color legend-adj"></div> 5km Adjacent Area</div>
                 <div class="legend-item" id="legendUF101" style="display:none;"><div class="legend-color legend-uf101"></div> UF101 Approval (original KML)</div>
@@ -5026,11 +5026,13 @@
       // Convert [lng, lat] to [lat, lng] for Leaflet
       const latLngs = currentKMLData.map(c => [c[1], c[0]]);
 
-      // Create editable polygon
+      // Create editable polygon. The outer (KML) boundary represents the
+      // Contingency Volume outer edge — drawn orange. The Flight Geography is
+      // the inset shape inside it (drawn blue in recalculateBuffers).
       editablePolygon = L.polygon(latLngs, {
-        color: '#2196F3',
+        color: '#FF9800',
         weight: 3,
-        fillColor: '#2196F3',
+        fillColor: '#FF9800',
         fillOpacity: 0.35
       }).addTo(flightGeoMap);
 
@@ -5186,16 +5188,16 @@
       // 2. Flight Geography is now the editable polygon (drawn separately)
       // No need to redraw it here - it's managed by drawEditableFlightGeography()
 
-      // 1. Contingency Volume (INSIDE flight geography)
+      // 1. Flight Geography (the inset shape INSIDE the KML/Contingency boundary)
       if (contingencyM > 0) {
         // Negative buffer to go inside
         const cvBuffer = turf.buffer(flightGeoPoly, -contingencyM / 1000, { units: 'kilometers' });
         if (cvBuffer && cvBuffer.geometry && cvBuffer.geometry.coordinates.length > 0) {
           flightGeoLayers.contingencyVolume = L.geoJSON(cvBuffer, {
             style: {
-              color: '#FF9800',
+              color: '#2196F3',
               weight: 2,
-              fillColor: '#FF9800',
+              fillColor: '#2196F3',
               fillOpacity: 0.4
             }
           }).addTo(flightGeoMap);
