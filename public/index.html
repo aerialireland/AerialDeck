@@ -2256,6 +2256,13 @@
       <h3>Create New Flight Plan</h3>
       <form id="newFlightPlanForm" onsubmit="createFlightPlan(event)">
         <div class="form-group">
+          <label>Duplicate From (optional)</label>
+          <select name="duplicate_from" id="duplicateSourceSelect" onchange="onDuplicateSourceChange()">
+            <option value="">— Start blank —</option>
+          </select>
+          <small style="color: var(--text-muted);">Copies location, settings, flight geography, airspace zones and documents from an existing plan. Flight logs are not copied — just give it a new name and date.</small>
+        </div>
+        <div class="form-group">
           <label>Flight Plan Name *</label>
           <input type="text" name="name" placeholder="e.g., Site Survey - Dublin Port" required>
         </div>
@@ -3850,9 +3857,30 @@
     function showNewFlightPlanForm() {
       const form = document.getElementById('newFlightPlanForm');
       form.reset();
+      // Populate the "Duplicate From" dropdown with existing plans
+      const dupSel = document.getElementById('duplicateSourceSelect');
+      if (dupSel) {
+        dupSel.innerHTML = '<option value="">— Start blank —</option>' +
+          flightPlans.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+      }
       // Set default date to today
       form.querySelector('[name="date"]').value = new Date().toISOString().split('T')[0];
       document.getElementById('newFlightPlanModal').classList.add('active');
+    }
+
+    // Pre-fill the form from a plan chosen to duplicate (evidence is copied
+    // server-side on submit). User still sets a new name + date.
+    function onDuplicateSourceChange() {
+      const id = document.getElementById('duplicateSourceSelect').value;
+      const form = document.getElementById('newFlightPlanForm');
+      if (!id) return;
+      const src = flightPlans.find(p => p.id == id);
+      if (!src) return;
+      if (form.location) form.location.value = src.location || '';
+      if (form.geozone) form.geozone.value = src.geozone || '';
+      if (form.max_altitude) form.max_altitude.value = src.max_altitude || 120;
+      if (form.status) form.status.value = src.status || 'Planned';
+      if (form.name && !form.name.value) form.name.value = 'Copy of ' + (src.name || '');
     }
 
     async function createFlightPlan(e) {
@@ -3870,6 +3898,9 @@
         if (res.ok) {
           const newPlan = await res.json();
           flightPlans.unshift(newPlan);
+          // Cache the (possibly duplicated) evidence so the new card shows its
+          // map thumbnail and compliance score right away.
+          if (newPlan.evidence) allPlansEvidence[newPlan.id] = newPlan.evidence;
           renderFlightPlans();
           closeModal('newFlightPlanModal');
           alert('Flight plan created successfully!');

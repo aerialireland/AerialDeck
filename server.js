@@ -252,7 +252,7 @@ app.get('/api/flight-plans', requireAuth, async (req, res) => {
 // Create a new flight plan
 app.post('/api/flight-plans', requireAuth, async (req, res) => {
   try {
-    const { name, date, location, geozone, max_altitude, status } = req.body;
+    const { name, date, location, geozone, max_altitude, status, duplicate_from } = req.body;
 
     // Initialize with default evidence structure
     const initialEvidence = {
@@ -261,6 +261,21 @@ app.post('/api/flight-plans', requireAuth, async (req, res) => {
       airspaceZones: [],
       flightGeography: [], emergencyResponsePlan: [], weather: [], nearbyEvents: [], notams: [], uf101Permission: [], uf101Application: []
     };
+
+    // When duplicating an existing plan, copy its full evidence (flight geography,
+    // airspace zones, parameters, documents). Flight logs are NOT copied — a
+    // duplicated plan starts with no flights.
+    let evidenceToUse = initialEvidence;
+    if (duplicate_from) {
+      const { data: src, error: srcErr } = await supabase
+        .from('flight_plans')
+        .select('evidence')
+        .eq('id', duplicate_from)
+        .single();
+      if (!srcErr && src && src.evidence) {
+        evidenceToUse = JSON.parse(JSON.stringify(src.evidence));
+      }
+    }
 
     const { data, error } = await supabase
       .from('flight_plans')
@@ -271,7 +286,7 @@ app.post('/api/flight-plans', requireAuth, async (req, res) => {
         geozone: geozone || null,
         max_altitude: max_altitude || 120,
         status: status || 'Planned',
-        evidence: initialEvidence
+        evidence: evidenceToUse
       }])
       .select()
       .single();
