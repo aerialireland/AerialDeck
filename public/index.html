@@ -4842,8 +4842,13 @@
           if (coords && coords.length > 0) {
             // Store original KML as UF101 reference (deep copy)
             uf101KMLData = JSON.parse(JSON.stringify(coords));
-            // Working copy for editable flight geography
+            // Working copy for editable flight geography.
+            // Simplify dense imports ONCE here for clean editing (max 12 vertices).
+            // Saved/edited geometry is never re-simplified on reload.
             currentKMLData = JSON.parse(JSON.stringify(coords));
+            if (currentKMLData.length > 12) {
+              currentKMLData = simplifyPolygonCoords(currentKMLData, 12);
+            }
             // Draw UF101 reference layer and editable polygon
             drawUF101Layer();
             drawEditableFlightGeography();
@@ -5013,10 +5018,10 @@
         editablePolygon = null;
       }
 
-      // Simplify if too many vertices (keep max 12 for clean editing)
-      if (currentKMLData.length > 12) {
-        currentKMLData = simplifyPolygonCoords(currentKMLData, 12);
-      }
+      // NOTE: Do NOT simplify here. This function runs both on fresh KML import
+      // and on reload of saved/edited geometry. Simplifying here would discard
+      // the user's edited vertices and reshape the area on every reload.
+      // Dense imports are simplified once, in handleKMLUpload().
 
       // Convert [lng, lat] to [lat, lng] for Leaflet
       const latLngs = currentKMLData.map(c => [c[1], c[0]]);
