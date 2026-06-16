@@ -1169,7 +1169,42 @@
     .legend-fg { background: #2196F3; }
     .legend-cv { background: #FF9800; }
     .legend-adj { background: rgba(158, 158, 158, 0.3); border: 2px dashed #9E9E9E; }
+    .legend-avoid { background: rgba(229, 57, 53, 0.25); border: 2px solid #E53935; }
     .legend-uf101 { background: transparent; border: 3px dashed #E65100; }
+    .flight-geo-avoid { margin-top: 10px; }
+    .btn-add-avoid {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid #E53935;
+      background: #fff;
+      color: #E53935;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-add-avoid:hover { background: #E53935; color: #fff; }
+    .btn-add-avoid:disabled { opacity: 0.5; cursor: not-allowed; }
+    .avoid-hint { font-size: 12px; color: #b71c1c; margin-top: 6px; line-height: 1.4; }
+    .avoid-area-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 10px;
+      margin-top: 6px;
+      background: rgba(229, 57, 53, 0.08);
+      border: 1px solid rgba(229, 57, 53, 0.3);
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .avoid-area-item button {
+      border: none;
+      background: transparent;
+      color: #E53935;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+    }
 
     .editable-hint {
       font-size: 0.75rem;
@@ -1564,9 +1599,16 @@
                 <div class="legend-item"><div class="legend-color legend-cv"></div> Contingency Volume (editable)</div>
                 <div class="legend-item"><div class="legend-color legend-grb"></div> Ground Risk Buffer (outside)</div>
                 <div class="legend-item"><div class="legend-color legend-adj"></div> 5km Adjacent Area</div>
+                <div class="legend-item" id="legendAvoid" style="display:none;"><div class="legend-color legend-avoid"></div> Avoid Area (keep-out)</div>
                 <div class="legend-item" id="legendUF101" style="display:none;"><div class="legend-color legend-uf101"></div> UF101 Approval (original KML)</div>
               </div>
               <div class="editable-hint" id="editableHint" style="display:none;">Drag the blue polygon vertices to adjust the Flight Geography</div>
+
+              <div class="flight-geo-avoid">
+                <button class="btn-add-avoid" onclick="startDrawAvoidArea()">➕ Add Avoid Area</button>
+                <div class="avoid-hint" id="avoidHint" style="display:none;">Click points on the map to outline the area to avoid, then click the first point (or double-click) to finish.</div>
+                <div id="avoidAreaList"></div>
+              </div>
 
               <div class="flight-geo-actions">
                 <button class="btn-clear-geo" onclick="clearFlightGeography()">Clear</button>
@@ -4749,6 +4791,11 @@
     let editablePolygon = null;      // Leaflet editable polygon reference
     let uf101LayerVisible = true;    // Toggle state for UF101 layer
 
+    // Avoid-areas (keep-out holes inside the flight geography).
+    // Each entry: { coords: [[lng,lat],...], polygon: L.Polygon (editable hazard outline) }
+    let avoidAreas = [];
+    let avoidRingLayers = [];        // Runtime L.geoJSON ring layers (cleared each recalc)
+
     // Lookup tables for buffer calculations
     const BUFFER_TABLES = {
       // Mode S (Sports) - max speed ~19 m/s
@@ -5071,6 +5118,173 @@
       currentKMLData = latLngs.map(ll => [ll.lng, ll.lat]); // convert back to [lng, lat]
     }
 
+    // ===== AVOID-AREAS (keep-out holes inside the flight geography) =====
+
+    // Start drawing a new avoid-area by clicking points on the map.
+    function startDrawAvoidArea() {
+      if (!flightGeoMap || !currentKMLData) {
+        alert('Add your flight geography (upload a KML) first.');
+        return;
+      }
+      document.getElementById('avoidHint').style.display = 'block';
+      const poly = flightGeoMap.editTools.startPolygon(null, {
+        color: '#E53935',
+        weight: 2,
+        fillColor: '#E53935',
+        fillOpacity: 0.12
+      });
+      poly.on('editable:drawing:commit', function() {
+        document.getElementById('avoidHint').style.display = 'none';
+        finalizeAvoidArea(poly);
+      });
+    }
+
+    // A freshly drawn avoid polygon: register it, wire edit handlers, redraw.
+    function finalizeAvoidArea(poly) {
+      const latLngs = poly.getLatLngs()[0] || [];
+      if (latLngs.length < 3) {
+        // Not a valid polygon — discard
+        flightGeoMap.removeLayer(poly);
+        return;
+      }
+      const area = { coords: latLngs.map(ll => [ll.lng, ll.lat]), polygon: poly };
+      attachAvoidHandlers(area);
+      avoidAreas.push(area);
+      renderAvoidAreaList();
+      recalculateBuffers(true);
+    }
+
+    // Recreate an avoid-area polygon from saved coords (no drawing step).
+    function addAvoidAreaFromCoords(coords) {
+      if (!coords || coords.length < 3 || !flightGeoMap) return;
+      const latLngs = coords.map(c => [c[1], c[0]]); // [lng,lat] -> [lat,lng]
+      const poly = L.polygon(latLngs, {
+        color: '#E53935',
+        weight: 2,
+        fillColor: '#E53935',
+        fillOpacity: 0.12
+      }).addTo(flightGeoMap);
+      poly.enableEdit();
+      const area = { coords: JSON.parse(JSON.stringify(coords)), polygon: poly };
+      attachAvoidHandlers(area);
+      avoidAreas.push(area);
+    }
+
+    // Keep an avoid-area's coords in sync with its edited polygon, and redraw.
+    function attachAvoidHandlers(area) {
+      const sync = function() {
+        const ring = area.polygon.getLatLngs()[0] || [];
+        area.coords = ring.map(ll => [ll.lng, ll.lat]);
+        recalculateBuffers(true);
+      };
+      area.polygon.on('editable:vertex:dragend', sync);
+      area.polygon.on('editable:vertex:deleted', sync);
+      area.polygon.on('editable:vertex:new', sync);
+    }
+
+    // Remove one avoid-area (by index).
+    function removeAvoidArea(index) {
+      const area = avoidAreas[index];
+      if (!area) return;
+      if (area.polygon) {
+        if (area.polygon.disableEdit) area.polygon.disableEdit();
+        flightGeoMap.removeLayer(area.polygon);
+      }
+      avoidAreas.splice(index, 1);
+      renderAvoidAreaList();
+      recalculateBuffers(true);
+    }
+
+    // Render the sidebar list of avoid-areas with remove buttons.
+    function renderAvoidAreaList() {
+      const list = document.getElementById('avoidAreaList');
+      if (!list) return;
+      list.innerHTML = avoidAreas.map((a, i) =>
+        `<div class="avoid-area-item"><span>⛔ Avoid area ${i + 1}</span>` +
+        `<button onclick="removeAvoidArea(${i})">Remove</button></div>`
+      ).join('');
+      const legend = document.getElementById('legendAvoid');
+      if (legend) legend.style.display = avoidAreas.length ? '' : 'none';
+    }
+
+    // Remove all avoid-area polygons and rings from the map and reset state.
+    function clearAvoidAreas() {
+      avoidAreas.forEach(a => {
+        if (a.polygon) {
+          if (a.polygon.disableEdit) a.polygon.disableEdit();
+          flightGeoMap.removeLayer(a.polygon);
+        }
+      });
+      avoidAreas = [];
+      clearAvoidRings();
+      renderAvoidAreaList();
+    }
+
+    // Remove just the buffer ring layers (redrawn each recalc).
+    function clearAvoidRings() {
+      avoidRingLayers.forEach(l => { if (l) flightGeoMap.removeLayer(l); });
+      avoidRingLayers = [];
+    }
+
+    // Union of all avoid exclusion zones (hazard buffered outward by grb+contingency).
+    // This is what gets cut out of the blue Flight Geography. Returns a turf
+    // feature (Polygon/MultiPolygon) or null when there are no avoid-areas.
+    function getAvoidExclusionUnion(grbM, contingencyM) {
+      const bufferKm = (grbM + contingencyM) / 1000;
+      let union = null;
+      avoidAreas.forEach(a => {
+        if (!a.coords || a.coords.length < 3) return;
+        const ring = JSON.parse(JSON.stringify(a.coords));
+        if (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1]) {
+          ring.push(ring[0]);
+        }
+        const poly = turf.polygon([ring]);
+        const buffered = bufferKm > 0 ? turf.buffer(poly, bufferKm, { units: 'kilometers' }) : poly;
+        if (!buffered) return;
+        union = union ? (turf.union(union, buffered) || union) : buffered;
+      });
+      return union;
+    }
+
+    // Draw the green Ground Risk Buffer and orange Contingency rings around each
+    // hazard. Order from the hazard outward: hazard -> GRB (green) -> Contingency
+    // (orange) -> flyable edge. Larger orange ring drawn first (underneath),
+    // green on top, hazard outline kept on top.
+    function drawAvoidRings(grbM, contingencyM) {
+      clearAvoidRings();
+      avoidAreas.forEach(a => {
+        if (!a.coords || a.coords.length < 3) return;
+        const ring = JSON.parse(JSON.stringify(a.coords));
+        if (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1]) {
+          ring.push(ring[0]);
+        }
+        const poly = turf.polygon([ring]);
+
+        // Outer Contingency ring (hazard + grb + contingency), orange
+        if (contingencyM > 0 && (grbM + contingencyM) > 0) {
+          const cvOuter = turf.buffer(poly, (grbM + contingencyM) / 1000, { units: 'kilometers' });
+          if (cvOuter) {
+            const layer = L.geoJSON(cvOuter, {
+              style: { color: '#FF9800', weight: 2, fillColor: '#FF9800', fillOpacity: 0.4 }
+            }).addTo(flightGeoMap);
+            avoidRingLayers.push(layer);
+          }
+        }
+        // Inner Ground Risk ring (hazard + grb), green
+        if (grbM > 0) {
+          const grbOuter = turf.buffer(poly, grbM / 1000, { units: 'kilometers' });
+          if (grbOuter) {
+            const layer = L.geoJSON(grbOuter, {
+              style: { color: '#4CAF50', weight: 2, fillColor: '#4CAF50', fillOpacity: 0.45 }
+            }).addTo(flightGeoMap);
+            avoidRingLayers.push(layer);
+          }
+        }
+        // Keep the editable hazard outline on top so its vertices stay clickable
+        if (a.polygon && a.polygon.bringToFront) a.polygon.bringToFront();
+      });
+    }
+
     // Toggle UF101 Approval layer visibility
     // Toggle UF101 layer visibility (called internally)
     function setUF101Visible(visible) {
@@ -5139,6 +5353,7 @@
 
       // Clear buffer layers only (not editable polygon or UF101)
       clearBufferLayers();
+      clearAvoidRings();
 
       // Create the flight geography polygon from current (possibly edited) coords
       const flightGeoCoords = JSON.parse(JSON.stringify(currentKMLData));
@@ -5207,7 +5422,18 @@
         // Negative buffer to go inside
         const cvBuffer = turf.buffer(flightGeoPoly, -contingencyM / 1000, { units: 'kilometers' });
         if (cvBuffer && cvBuffer.geometry && cvBuffer.geometry.coordinates.length > 0) {
-          flightGeoLayers.contingencyVolume = L.geoJSON(cvBuffer, {
+          // Punch keep-out holes for any avoid-areas (hazard + GRB + contingency).
+          let fgFeature = cvBuffer;
+          const exclusion = getAvoidExclusionUnion(grbM, contingencyM);
+          if (exclusion) {
+            try {
+              const diff = turf.difference(cvBuffer, exclusion);
+              if (diff) fgFeature = diff;
+            } catch (e) {
+              console.warn('Avoid-area difference failed, drawing FG without holes:', e);
+            }
+          }
+          flightGeoLayers.contingencyVolume = L.geoJSON(fgFeature, {
             style: {
               color: '#2196F3',
               weight: 2,
@@ -5217,6 +5443,9 @@
           }).addTo(flightGeoMap);
         }
       }
+
+      // Draw GRB/contingency rings around each avoid-area (keep-out holes)
+      drawAvoidRings(grbM, contingencyM);
 
       // Fit map to show all layers (skip when dragging vertices)
       if (!skipFitBounds) {
@@ -5243,6 +5472,7 @@
     // Clear all map layers including editable polygon and UF101
     function clearMapLayers() {
       clearBufferLayers();
+      clearAvoidAreas();
       if (flightGeoLayers.uf101Approval) {
         flightGeoMap.removeLayer(flightGeoLayers.uf101Approval);
         flightGeoLayers.uf101Approval = null;
@@ -5385,9 +5615,18 @@
       // Capture map screenshot (without Adjacent Area)
       const mapScreenshot = await captureMapScreenshot();
 
+      // Make sure each avoid-area's coords reflect its current (possibly edited) polygon
+      avoidAreas.forEach(a => {
+        if (a.polygon) {
+          const ring = a.polygon.getLatLngs()[0] || [];
+          if (ring.length >= 3) a.coords = ring.map(ll => [ll.lng, ll.lat]);
+        }
+      });
+
       const geoData = {
         kmlCoordinates: currentKMLData,           // Editable flight geography coords
         uf101KMLCoordinates: uf101KMLData,         // Original KML coords (UF101 Approval)
+        avoidAreas: avoidAreas.map(a => a.coords), // Keep-out holes ([[lng,lat],...] each)
         kmlFilename: currentKMLFilename,
         height: parseInt(height),
         mode: mode,
@@ -5472,6 +5711,10 @@
         setTimeout(() => {
           drawUF101Layer();
           drawEditableFlightGeography();
+          // Restore saved avoid-areas (keep-out holes) before computing buffers
+          clearAvoidAreas();
+          (saved.avoidAreas || []).forEach(coords => addAvoidAreaFromCoords(coords));
+          renderAvoidAreaList();
           recalculateBuffers();
           // Show editing hint
           document.getElementById('editableHint').style.display = 'block';
