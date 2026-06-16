@@ -519,7 +519,6 @@
       padding: 1rem 1.25rem;
       cursor: pointer;
       border: 1px solid var(--border);
-      border-left: 4px solid var(--accent);
       transition: all 0.2s;
       display: flex;
       flex-direction: column;
@@ -556,6 +555,19 @@
       padding: 0.1rem 0.2rem;
     }
     .plan-card-footer { margin-top: auto; display: flex; justify-content: flex-end; padding-top: 0.6rem; }
+    /* Full-width compliance bar on cards (label + percentage keep their positions) */
+    .plan-card-footer .compliance-mini { width: 100%; }
+    .plan-card-footer .compliance-mini-row { width: 100%; }
+    .plan-card-footer .compliance-mini-bar { flex: 1; width: auto; }
+    .sort-select {
+      padding: 0.4rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-card);
+      color: var(--text-primary);
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
     .delete-plan-btn {
       background: none;
       border: none;
@@ -1367,7 +1379,15 @@
         <div id="flightPlansTab">
           <div class="tab-header">
             <h3>Flight Plans</h3>
-            <button class="add-btn" onclick="showNewFlightPlanForm()">+ New Flight Plan</button>
+            <div style="display:flex;align-items:center;gap:0.6rem;">
+              <select id="planSortSelect" class="sort-select" onchange="onPlanSortChange()" title="Sort flight plans">
+                <option value="date-desc">Date (newest)</option>
+                <option value="date-asc">Date (oldest)</option>
+                <option value="compliance-desc">Compliance (high → low)</option>
+                <option value="compliance-asc">Compliance (low → high)</option>
+              </select>
+              <button class="add-btn" onclick="showNewFlightPlanForm()">+ New Flight Plan</button>
+            </div>
           </div>
           <div class="flight-plans-grid" id="flightPlansGrid">
             <div class="loading"><div class="spinner"></div>Loading...</div>
@@ -2893,6 +2913,27 @@
       }
     }
 
+    let planSortMode = 'date-desc';
+    function onPlanSortChange() {
+      planSortMode = document.getElementById('planSortSelect').value;
+      const filter = document.getElementById('searchInput')?.value || '';
+      renderFlightPlans(filter);
+    }
+
+    function sortFlightPlans(plans) {
+      const arr = plans.slice();
+      arr.sort((a, b) => {
+        switch (planSortMode) {
+          case 'date-asc':  return new Date(a.date || 0) - new Date(b.date || 0);
+          case 'date-desc': return new Date(b.date || 0) - new Date(a.date || 0);
+          case 'compliance-asc':  return calculatePlanCompliance(a.id).percentage - calculatePlanCompliance(b.id).percentage;
+          case 'compliance-desc': return calculatePlanCompliance(b.id).percentage - calculatePlanCompliance(a.id).percentage;
+          default: return 0;
+        }
+      });
+      return arr;
+    }
+
     function renderFlightPlans(filter = '') {
       const filtered = flightPlans.filter(p =>
         (p.name || '').toLowerCase().includes(filter.toLowerCase()) ||
@@ -2900,7 +2941,7 @@
       );
       document.getElementById('flightPlansGrid').innerHTML = filtered.length === 0
         ? '<div class="no-data">No flight plans found</div>'
-        : filtered.map(plan => {
+        : sortFlightPlans(filtered).map(plan => {
           const logsCount = plan.flight_count || flightLogs.filter(l => l.flight_plan_id == plan.id).length;
           const totalTime = plan.total_air_time || 0;
           const planEvidence = allPlansEvidence[plan.id] || {};
