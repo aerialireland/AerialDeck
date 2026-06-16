@@ -5008,6 +5008,7 @@
     let flightGeoMap = null;
     let flightGeoLayers = {
       flightGeography: null,    // Editable polygon layer
+      contingencyFill: null,    // Orange fill across the KML area (avoid interiors cut out)
       groundRiskBuffer: null,
       contingencyVolume: null,
       adjacentArea: null,
@@ -5328,13 +5329,14 @@
       const latLngs = currentKMLData.map(c => [c[1], c[0]]);
 
       // Create editable polygon. The outer (KML) boundary represents the
-      // Contingency Volume outer edge — drawn orange. The Flight Geography is
-      // the inset shape inside it (drawn blue in recalculateBuffers).
+      // Contingency Volume outer edge — drawn as an orange OUTLINE. The orange
+      // fill is drawn separately (contingencyFill in recalculateBuffers) so that
+      // avoid-area interiors can be cut out of it; here the fill is transparent.
       editablePolygon = L.polygon(latLngs, {
         color: '#FF9800',
         weight: 3,
         fillColor: '#FF9800',
-        fillOpacity: 0.35
+        fillOpacity: 0
       }).addTo(flightGeoMap);
 
       // Enable editing
@@ -5701,6 +5703,23 @@ ${avoidPlacemarks}
       // Create GeoJSON polygon
       const flightGeoPoly = turf.polygon([flightGeoCoords]);
 
+      // Orange Contingency fill across the KML area, with each avoid-area's
+      // interior cut out so the centre of an avoid-area is truly empty (map shows
+      // through). Drawn first = bottom layer; the blue Flight Geography and the
+      // buffer bands sit on top. Non-interactive so it never blocks editing.
+      let contFillFeature = flightGeoPoly;
+      const hazardUnion = getAvoidExclusionUnion(0, 0); // raw avoid polygons, no buffer
+      if (hazardUnion) {
+        try {
+          const diff = turf.difference(flightGeoPoly, hazardUnion);
+          if (diff) contFillFeature = diff;
+        } catch (e) { /* fall back to full fill */ }
+      }
+      flightGeoLayers.contingencyFill = L.geoJSON(contFillFeature, {
+        interactive: false,
+        style: { color: '#FF9800', weight: 0, fillColor: '#FF9800', fillOpacity: 0.35 }
+      }).addTo(flightGeoMap);
+
       // Get buffer values
       let contingencyM = 0;
       let grbM = 0;
@@ -5795,7 +5814,7 @@ ${avoidPlacemarks}
 
     // Clear buffer layers only (not editable polygon or UF101)
     function clearBufferLayers() {
-      ['groundRiskBuffer', 'contingencyVolume', 'adjacentArea'].forEach(key => {
+      ['contingencyFill', 'groundRiskBuffer', 'contingencyVolume', 'adjacentArea'].forEach(key => {
         if (flightGeoLayers[key]) {
           flightGeoMap.removeLayer(flightGeoLayers[key]);
           flightGeoLayers[key] = null;
