@@ -5461,13 +5461,13 @@
       // Draw GRB/contingency rings around each avoid-area (keep-out holes)
       drawAvoidRings(grbM, contingencyM);
 
-      // Fit map to show all layers (skip when dragging vertices)
+      // Fit map to the flight geography (skip when dragging vertices).
+      // Ignore the adjacent area so the view frames the operational area, not
+      // the 5km adjacent ring. GRB bounds contain the whole flight geography.
       if (!skipFitBounds) {
-        const bounds = flightGeoLayers.adjacentArea
-          ? flightGeoLayers.adjacentArea.getBounds()
-          : (flightGeoLayers.groundRiskBuffer
-            ? flightGeoLayers.groundRiskBuffer.getBounds()
-            : (editablePolygon ? editablePolygon.getBounds() : null));
+        const bounds = flightGeoLayers.groundRiskBuffer
+          ? flightGeoLayers.groundRiskBuffer.getBounds()
+          : (editablePolygon ? editablePolygon.getBounds() : null);
 
         if (bounds) flightGeoMap.fitBounds(bounds, { padding: [20, 20] });
       }
