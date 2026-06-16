@@ -1169,7 +1169,7 @@
     .legend-fg { background: #2196F3; }
     .legend-cv { background: #FF9800; }
     .legend-adj { background: rgba(158, 158, 158, 0.3); border: 2px dashed #9E9E9E; }
-    .legend-avoid { background: rgba(229, 57, 53, 0.25); border: 2px solid #E53935; }
+    .legend-avoid { background: transparent; border: 2px solid #E53935; }
     .legend-uf101 { background: transparent; border: 3px dashed #E65100; }
     .flight-geo-avoid { margin-top: 10px; }
     .btn-add-avoid {
@@ -5130,8 +5130,9 @@
       const poly = flightGeoMap.editTools.startPolygon(null, {
         color: '#E53935',
         weight: 2,
+        fill: true,
         fillColor: '#E53935',
-        fillOpacity: 0.12
+        fillOpacity: 0
       });
       poly.on('editable:drawing:commit', function() {
         document.getElementById('avoidHint').style.display = 'none';
@@ -5161,8 +5162,9 @@
       const poly = L.polygon(latLngs, {
         color: '#E53935',
         weight: 2,
+        fill: true,
         fillColor: '#E53935',
-        fillOpacity: 0.12
+        fillOpacity: 0
       }).addTo(flightGeoMap);
       poly.enableEdit();
       const area = { coords: JSON.parse(JSON.stringify(coords)), polygon: poly };
@@ -5246,10 +5248,9 @@
       return union;
     }
 
-    // Draw the green Ground Risk Buffer and orange Contingency rings around each
-    // hazard. Order from the hazard outward: hazard -> GRB (green) -> Contingency
-    // (orange) -> flyable edge. Larger orange ring drawn first (underneath),
-    // green on top, hazard outline kept on top.
+    // Draw the Ground Risk Buffer and Contingency as BANDS outside each hazard.
+    // The hazard interior itself stays empty (transparent hole). Outward order:
+    // hazard (no fill) -> GRB band (green) -> Contingency band (orange) -> flyable.
     function drawAvoidRings(grbM, contingencyM) {
       clearAvoidRings();
       avoidAreas.forEach(a => {
@@ -5260,26 +5261,39 @@
         }
         const poly = turf.polygon([ring]);
 
-        // Outer Contingency ring (hazard + grb + contingency), orange
-        if (contingencyM > 0 && (grbM + contingencyM) > 0) {
-          const cvOuter = turf.buffer(poly, (grbM + contingencyM) / 1000, { units: 'kilometers' });
-          if (cvOuter) {
-            const layer = L.geoJSON(cvOuter, {
-              style: { color: '#FF9800', weight: 2, fillColor: '#FF9800', fillOpacity: 0.4 }
-            }).addTo(flightGeoMap);
-            avoidRingLayers.push(layer);
-          }
+        // Inner boundary of the Ground Risk Buffer is the hazard edge itself.
+        const grbBuf = grbM > 0 ? turf.buffer(poly, grbM / 1000, { units: 'kilometers' }) : null;
+        const cvBuf = (grbM + contingencyM) > 0
+          ? turf.buffer(poly, (grbM + contingencyM) / 1000, { units: 'kilometers' })
+          : null;
+
+        // Ground Risk Buffer band = (hazard + grb) minus hazard, green
+        if (grbBuf) {
+          try {
+            const band = turf.difference(grbBuf, poly);
+            if (band) {
+              const layer = L.geoJSON(band, {
+                style: { color: '#4CAF50', weight: 2, fillColor: '#4CAF50', fillOpacity: 0.35 }
+              }).addTo(flightGeoMap);
+              avoidRingLayers.push(layer);
+            }
+          } catch (e) { console.warn('GRB band failed:', e); }
         }
-        // Inner Ground Risk ring (hazard + grb), green
-        if (grbM > 0) {
-          const grbOuter = turf.buffer(poly, grbM / 1000, { units: 'kilometers' });
-          if (grbOuter) {
-            const layer = L.geoJSON(grbOuter, {
-              style: { color: '#4CAF50', weight: 2, fillColor: '#4CAF50', fillOpacity: 0.45 }
-            }).addTo(flightGeoMap);
-            avoidRingLayers.push(layer);
-          }
+
+        // Contingency band = (hazard + grb + contingency) minus (hazard + grb), orange
+        if (contingencyM > 0 && cvBuf) {
+          try {
+            const inner = grbBuf || poly;
+            const band = turf.difference(cvBuf, inner);
+            if (band) {
+              const layer = L.geoJSON(band, {
+                style: { color: '#FF9800', weight: 2, fillColor: '#FF9800', fillOpacity: 0.35 }
+              }).addTo(flightGeoMap);
+              avoidRingLayers.push(layer);
+            }
+          } catch (e) { console.warn('Contingency band failed:', e); }
         }
+
         // Keep the editable hazard outline on top so its vertices stay clickable
         if (a.polygon && a.polygon.bringToFront) a.polygon.bringToFront();
       });
