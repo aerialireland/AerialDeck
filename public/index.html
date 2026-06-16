@@ -5335,6 +5335,7 @@
       const fgPlacemark =
 `    <Placemark>
       <name>Flight Geography</name>
+      <styleUrl>#fgStyle</styleUrl>
       <Polygon>
         <outerBoundaryIs><LinearRing><coordinates>${ringToKml(currentKMLData)}</coordinates></LinearRing></outerBoundaryIs>
 ${innerBoundaries}
@@ -5345,6 +5346,7 @@ ${innerBoundaries}
       const avoidPlacemarks = validAvoids.map((a, i) =>
 `    <Placemark>
       <name>Avoid Area ${i + 1}</name>
+      <styleUrl>#avoidStyle</styleUrl>
       <Polygon>
         <outerBoundaryIs><LinearRing><coordinates>${ringToKml(a.coords)}</coordinates></LinearRing></outerBoundaryIs>
       </Polygon>
@@ -5356,6 +5358,14 @@ ${innerBoundaries}
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
     <name>${esc(baseName)}</name>
+    <Style id="fgStyle">
+      <LineStyle><color>fff39621</color><width>3</width></LineStyle>
+      <PolyStyle><fill>0</fill><outline>1</outline></PolyStyle>
+    </Style>
+    <Style id="avoidStyle">
+      <LineStyle><color>ff3539e5</color><width>2</width></LineStyle>
+      <PolyStyle><fill>0</fill><outline>1</outline></PolyStyle>
+    </Style>
 ${fgPlacemark}
 ${avoidPlacemarks}
   </Document>
