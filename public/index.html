@@ -5523,15 +5523,15 @@
         }
 
         // Contingency band = (hazard + grb + contingency) minus (hazard + grb), orange (outer).
-        // No stroke here — the outer edge is the flight-geography boundary and is
-        // drawn as a blue outline below (to match the flyable edge).
+        // Orange stroke keeps the inner edge (green/orange boundary) orange; the
+        // outer edge is then overdrawn with a blue outline below (flyable edge).
         if (contingencyM > 0 && cvBuf) {
           try {
             const inner = grbBuf || poly;
             const band = turf.difference(cvBuf, inner);
             if (band) {
               const layer = L.geoJSON(band, {
-                style: { color: '#FF9800', weight: 0, fillColor: '#FF9800', fillOpacity: 0.35 }
+                style: { color: '#FF9800', weight: 2, fillColor: '#FF9800', fillOpacity: 0.35 }
               }).addTo(flightGeoMap);
               avoidRingLayers.push(layer);
             }
@@ -5540,6 +5540,7 @@
 
         // Blue outline of the outer keep-out boundary — this is the flight
         // geography (flyable) edge, so it matches the blue used elsewhere.
+        // Drawn after the orange band so it overdraws the band's outer stroke.
         if (cvBuf) {
           const outline = L.geoJSON(cvBuf, {
             interactive: false,
