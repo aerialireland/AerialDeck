@@ -5522,18 +5522,30 @@
           } catch (e) { console.warn('GRB band failed:', e); }
         }
 
-        // Contingency band = (hazard + grb + contingency) minus (hazard + grb), orange (outer)
+        // Contingency band = (hazard + grb + contingency) minus (hazard + grb), orange (outer).
+        // No stroke here — the outer edge is the flight-geography boundary and is
+        // drawn as a blue outline below (to match the flyable edge).
         if (contingencyM > 0 && cvBuf) {
           try {
             const inner = grbBuf || poly;
             const band = turf.difference(cvBuf, inner);
             if (band) {
               const layer = L.geoJSON(band, {
-                style: { color: '#FF9800', weight: 2, fillColor: '#FF9800', fillOpacity: 0.35 }
+                style: { color: '#FF9800', weight: 0, fillColor: '#FF9800', fillOpacity: 0.35 }
               }).addTo(flightGeoMap);
               avoidRingLayers.push(layer);
             }
           } catch (e) { console.warn('Contingency band failed:', e); }
+        }
+
+        // Blue outline of the outer keep-out boundary — this is the flight
+        // geography (flyable) edge, so it matches the blue used elsewhere.
+        if (cvBuf) {
+          const outline = L.geoJSON(cvBuf, {
+            interactive: false,
+            style: { color: '#2196F3', weight: 2, fill: false }
+          }).addTo(flightGeoMap);
+          avoidRingLayers.push(outline);
         }
 
         // Keep the editable hazard outline on top so its vertices stay clickable
