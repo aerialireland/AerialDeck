@@ -4865,13 +4865,13 @@
       const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap',
         crossOrigin: 'anonymous'
-      }).addTo(flightGeoMap);
+      });
 
       const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles © Esri',
         maxZoom: 19,
         crossOrigin: 'anonymous'
-      });
+      }).addTo(flightGeoMap);
 
       L.control.layers(
         { 'Street': streetLayer, 'Satellite': satelliteLayer },
