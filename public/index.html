@@ -930,7 +930,7 @@
     /* Map card - image fills space */
     .evidence-bento-item .evidence-map-container {
       margin-top: 0.5rem;
-      height: 250px;
+      aspect-ratio: 3 / 1;
       overflow: hidden;
     }
     .evidence-bento-item .evidence-map-image {
@@ -5905,23 +5905,38 @@ ${avoidPlacemarks}
             flightGeoMap.removeLayer(flightGeoLayers.adjacentArea);
           }
 
-          // Make sure Leaflet knows the true container size before fitting, or
-          // it centres/zooms against a stale size and the shape gets clipped.
+          // Temporarily reshape the map into a wide 3:1 banner so the saved
+          // Operation Map fills its (wide) frame instead of being a squarish
+          // image with big side margins. Restored right after capture.
+          const mapContainer = document.getElementById('flightGeoMap');
+          const geoContainer = mapContainer.parentElement; // .flight-geo-map-container
+          const prevMinHeight = geoContainer.style.minHeight;
+          const prevHeight = geoContainer.style.height;
+          const bannerW = geoContainer.offsetWidth || 1000;
+          geoContainer.style.minHeight = '0px';
+          geoContainer.style.height = Math.round(bannerW / 3) + 'px';
+
+          // invalidateSize so Leaflet uses the new (banner) size; otherwise it
+          // centres/zooms against a stale size and the shape gets clipped.
           flightGeoMap.invalidateSize();
 
-          // Fit to GRB bounds (outermost visible layer) with padding. animate:false
-          // so the view is fully settled (not mid-pan) when we capture.
+          // Fit to GRB bounds (outermost visible layer). animate:false so the
+          // view is fully settled (not mid-pan) when we capture.
           const bounds = flightGeoLayers.groundRiskBuffer
             ? flightGeoLayers.groundRiskBuffer.getBounds()
             : (editablePolygon ? editablePolygon.getBounds() : null);
-          if (!bounds) { resolve(null); return; }
-          flightGeoMap.fitBounds(bounds, { padding: [60, 60], animate: false });
+          if (!bounds) {
+            geoContainer.style.minHeight = prevMinHeight;
+            geoContainer.style.height = prevHeight;
+            flightGeoMap.invalidateSize();
+            resolve(null); return;
+          }
+          flightGeoMap.fitBounds(bounds, { padding: [40, 40], animate: false });
 
           // Wait for tiles to load at the new view
           await new Promise(r => setTimeout(r, 1500));
 
           // Capture using html2canvas
-          const mapContainer = document.getElementById('flightGeoMap');
           const canvas = await html2canvas(mapContainer, {
             useCORS: true,
             allowTaint: true,
@@ -5929,6 +5944,11 @@ ${avoidPlacemarks}
             logging: false,
             scale: 1
           });
+
+          // Restore the map's normal size
+          geoContainer.style.minHeight = prevMinHeight;
+          geoContainer.style.height = prevHeight;
+          flightGeoMap.invalidateSize();
 
           // Re-add Adjacent Area layer
           if (hadAdjacentArea && flightGeoLayers.adjacentArea) {
