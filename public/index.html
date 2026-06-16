@@ -4813,10 +4813,24 @@
       // Default center on Ireland - use preferCanvas for screenshot, editable for polygon editing
       flightGeoMap = L.map('flightGeoMap', { preferCanvas: true, editable: true }).setView([53.5, -7.5], 7);
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      // Base layers: Street (default) and Satellite, switchable via the
+      // layers control in the map's top-right corner.
+      const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap',
         crossOrigin: 'anonymous'
       }).addTo(flightGeoMap);
+
+      const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles © Esri',
+        maxZoom: 19,
+        crossOrigin: 'anonymous'
+      });
+
+      L.control.layers(
+        { 'Street': streetLayer, 'Satellite': satelliteLayer },
+        null,
+        { position: 'topright' }
+      ).addTo(flightGeoMap);
 
       // Load saved data if exists
       loadFlightGeographyData();
