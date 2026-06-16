@@ -1205,6 +1205,20 @@
       font-size: 13px;
       font-weight: 600;
     }
+    .btn-toggle-zones {
+      width: 100%;
+      margin-top: 10px;
+      padding: 9px 12px;
+      border: 1px solid #8E24AA;
+      background: #fff;
+      color: #8E24AA;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-toggle-zones:hover, .btn-toggle-zones.active { background: #8E24AA; color: #fff; }
+    .btn-toggle-zones:disabled { opacity: 0.6; cursor: not-allowed; }
+    .legend-zones { background: rgba(142, 36, 170, 0.2); border: 1px solid #8E24AA; }
 
     .editable-hint {
       font-size: 0.75rem;
@@ -1603,9 +1617,12 @@
                 <div class="legend-item"><div class="legend-color legend-grb"></div> Ground Risk Buffer (outside)</div>
                 <div class="legend-item"><div class="legend-color legend-adj"></div> 5km Adjacent Area</div>
                 <div class="legend-item" id="legendAvoid" style="display:none;"><div class="legend-color legend-avoid"></div> Avoid Area (keep-out)</div>
+                <div class="legend-item" id="legendZones" style="display:none;"><div class="legend-color legend-zones"></div> IAA Airspace Zones</div>
                 <div class="legend-item" id="legendUF101" style="display:none;"><div class="legend-color legend-uf101"></div> UF101 Approval (original KML)</div>
               </div>
               <div class="editable-hint" id="editableHint" style="display:none;">Drag the blue polygon vertices to adjust the Flight Geography</div>
+
+              <button class="btn-toggle-zones" id="toggleZonesBtn" onclick="toggleAirspaceZones()">🗺️ Show Airspace Zones</button>
 
               <div class="flight-geo-avoid">
                 <button class="btn-add-avoid" onclick="startDrawAvoidArea()">➕ Add Avoid Area</button>
@@ -4206,6 +4223,98 @@
       }
     }
 
+    // Toggle the IAA airspace zones overlay on the planner map. Shows zones
+    // within ~5km of the flight geography (the plan's selected version, or the
+    // newest available if none saved).
+    async function toggleAirspaceZones() {
+      const btn = document.getElementById('toggleZonesBtn');
+      const legend = document.getElementById('legendZones');
+
+      // Turn OFF
+      if (airspaceZonesVisible) {
+        if (airspaceZonesLayer) { flightGeoMap.removeLayer(airspaceZonesLayer); airspaceZonesLayer = null; }
+        airspaceZonesVisible = false;
+        btn.textContent = '🗺️ Show Airspace Zones';
+        btn.classList.remove('active');
+        if (legend) legend.style.display = 'none';
+        return;
+      }
+
+      if (!flightGeoMap || !currentKMLData || currentKMLData.length < 3) {
+        alert('Add your flight geography (upload a KML) first.');
+        return;
+      }
+
+      const versionId = (currentEvidence?.airspaceZones?.versionId) || (geozoneVersions[0] && geozoneVersions[0].id);
+      if (!versionId) {
+        alert('No IAA GeoZone version available. Add one via the Airspace Zones panel first.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '⏳ Loading zones…';
+      try {
+        const geojson = await loadGeozoneData(versionId);
+        if (!geojson || !Array.isArray(geojson.features)) {
+          alert('Failed to load airspace zone data.');
+          btn.textContent = '🗺️ Show Airspace Zones';
+          return;
+        }
+
+        // Build a ~5km bounding box around the flight geography
+        const coords = currentKMLData.map(c => Array.isArray(c) ? c : [c.lng, c.lat]);
+        if (coords[0][0] !== coords[coords.length - 1][0] || coords[0][1] !== coords[coords.length - 1][1]) {
+          coords.push(coords[0]);
+        }
+        const buffered = turf.buffer(turf.polygon([coords]), 5, { units: 'kilometers' });
+        const vb = turf.bbox(buffered); // [minX, minY, maxX, maxY]
+
+        // Filter to features whose bounding box overlaps the vicinity (cheap test)
+        const near = [];
+        for (const f of geojson.features) {
+          try {
+            if (!f.__bbox) f.__bbox = turf.bbox(f);
+            const b = f.__bbox;
+            if (b[0] <= vb[2] && b[2] >= vb[0] && b[1] <= vb[3] && b[3] >= vb[1]) near.push(f);
+          } catch (e) { /* skip invalid geometry */ }
+        }
+
+        if (near.length === 0) {
+          alert('No IAA airspace zones found within ~5km of this flight geography.');
+          btn.textContent = '🗺️ Show Airspace Zones';
+          return;
+        }
+
+        airspaceZonesLayer = L.geoJSON({ type: 'FeatureCollection', features: near }, {
+          style: { color: '#8E24AA', weight: 1.5, fillColor: '#8E24AA', fillOpacity: 0.12 },
+          onEachFeature: (feature, layer) => {
+            const p = feature.properties || {};
+            const name = p.name || p.identifier || 'Airspace Zone';
+            const lines = [`<b>${esc(name)}</b>`];
+            if (p.type) lines.push(esc(p.type));
+            if (p.identifier) lines.push(`<small>${esc(p.identifier)}</small>`);
+            if (p.reason) lines.push(`<small>Reason: ${esc(p.reason)}</small>`);
+            layer.bindPopup(lines.join('<br>'));
+          }
+        }).addTo(flightGeoMap);
+
+        // Keep editing handles and avoid outlines on top of the zone fills
+        if (editablePolygon && editablePolygon.bringToFront) editablePolygon.bringToFront();
+        avoidAreas.forEach(a => { if (a.polygon && a.polygon.bringToFront) a.polygon.bringToFront(); });
+
+        airspaceZonesVisible = true;
+        btn.textContent = '🗺️ Hide Airspace Zones';
+        btn.classList.add('active');
+        if (legend) legend.style.display = '';
+      } catch (err) {
+        console.error('Airspace zones toggle failed:', err);
+        alert('Failed to display airspace zones.');
+        btn.textContent = '🗺️ Show Airspace Zones';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
     function populateGeozoneVersionSelect(currentVersionId) {
       const select = document.getElementById('geozoneVersionSelect');
       if (!select) return;
@@ -4915,6 +5024,10 @@
     let avoidAreas = [];
     let avoidRingLayers = [];        // Runtime L.geoJSON ring layers (cleared each recalc)
 
+    // IAA airspace zones overlay (toggle on the planner map)
+    let airspaceZonesLayer = null;
+    let airspaceZonesVisible = false;
+
     // Lookup tables for buffer calculations
     const BUFFER_TABLES = {
       // Mode S (Sports) - max speed ~19 m/s
@@ -4975,6 +5088,14 @@
 
       const mapContainer = document.getElementById('flightGeoMap');
       if (!mapContainer) return;
+
+      // Reset airspace zones overlay state for the fresh map
+      airspaceZonesLayer = null;
+      airspaceZonesVisible = false;
+      const zonesBtn = document.getElementById('toggleZonesBtn');
+      if (zonesBtn) { zonesBtn.textContent = '🗺️ Show Airspace Zones'; zonesBtn.classList.remove('active'); }
+      const zonesLegend = document.getElementById('legendZones');
+      if (zonesLegend) zonesLegend.style.display = 'none';
 
       // Default center on Ireland - use preferCanvas for screenshot, editable for polygon editing
       flightGeoMap = L.map('flightGeoMap', { preferCanvas: true, editable: true }).setView([53.5, -7.5], 7);
