@@ -1780,6 +1780,21 @@
               </div>
               <small style="color: var(--text-muted); margin-top: 0.25rem; display: block;">Select the IAA zone version valid at time of flight</small>
             </div>
+            <div class="form-group" style="border: 1px dashed var(--border-light); border-radius: 6px; padding: 0.6rem; background: var(--card-bg);">
+              <label>Upload New IAA Version (.geojson)</label>
+              <input type="file" id="geozoneUploadFile" accept=".geojson,application/geo+json,application/json" style="display: block; margin-bottom: 0.4rem;">
+              <input type="text" id="geozoneUploadCode" placeholder="Version code, e.g. 20260301V1" style="width: 100%; padding: 0.4rem; border-radius: 4px; border: 1px solid var(--border-light); margin-bottom: 0.4rem;">
+              <div style="display: flex; gap: 0.5rem; margin-bottom: 0.4rem;">
+                <label style="flex: 1; font-size: 0.8rem; color: var(--text-muted);">Issued
+                  <input type="date" id="geozoneUploadIssued" style="width: 100%; padding: 0.35rem; border-radius: 4px; border: 1px solid var(--border-light);">
+                </label>
+                <label style="flex: 1; font-size: 0.8rem; color: var(--text-muted);">Valid from
+                  <input type="date" id="geozoneUploadValidFrom" style="width: 100%; padding: 0.35rem; border-radius: 4px; border: 1px solid var(--border-light);">
+                </label>
+              </div>
+              <button type="button" class="btn-submit" id="geozoneUploadBtn" onclick="uploadGeozoneVersion()" style="white-space: nowrap;">⬆️ Upload Version</button>
+              <div id="geozoneUploadStatus" style="font-size: 0.8rem; margin-top: 0.4rem;"></div>
+            </div>
             <div class="form-group">
               <label>Detected Zones</label>
               <div id="detectedZonesContainer" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border-light); border-radius: 4px; padding: 0.5rem; background: var(--card-bg);">
@@ -3977,27 +3992,128 @@
     let detectedZonesSelection = {};
 
     async function loadGeozoneVersions() {
+      // Built-in versions (static manifest) + any uploaded versions (server),
+      // merged, deduped by id, newest validFrom first.
+      let builtin = [];
+      let uploaded = [];
       try {
         const res = await fetch('/geozones/index.json');
         const data = await res.json();
-        geozoneVersions = data.versions || [];
-        console.log('Loaded geozone versions:', geozoneVersions.length);
+        builtin = data.versions || [];
       } catch (err) {
-        console.error('Error loading geozone versions:', err);
-        geozoneVersions = [];
+        console.error('Error loading built-in geozone versions:', err);
       }
+      try {
+        const res = await fetch('/api/geozone-versions');
+        if (res.ok) {
+          const data = await res.json();
+          uploaded = data.versions || [];
+        }
+      } catch (err) {
+        console.error('Error loading uploaded geozone versions:', err);
+      }
+      const seen = new Set();
+      geozoneVersions = [...uploaded, ...builtin].filter(v => {
+        if (!v || !v.id || seen.has(v.id)) return false;
+        seen.add(v.id);
+        return true;
+      });
+      geozoneVersions.sort((a, b) => (b.validFrom || '').localeCompare(a.validFrom || ''));
+      console.log('Loaded geozone versions:', geozoneVersions.length, `(${uploaded.length} uploaded)`);
     }
 
     async function loadGeozoneData(versionId) {
       const version = geozoneVersions.find(v => v.id === versionId);
       if (!version) return null;
       try {
-        const res = await fetch(`/geozones/${version.file}`);
+        // Uploaded versions carry a full storage URL; built-ins use the static path.
+        const src = version.url ? version.url : `/geozones/${version.file}`;
+        const res = await fetch(src);
         currentGeozoneData = await res.json();
         return currentGeozoneData;
       } catch (err) {
         console.error('Error loading geozone data:', err);
         return null;
+      }
+    }
+
+    // Upload a new IAA GeoZone version (.geojson) from the Airspace Zones modal.
+    async function uploadGeozoneVersion() {
+      const fileInput = document.getElementById('geozoneUploadFile');
+      const codeRaw = (document.getElementById('geozoneUploadCode').value || '').trim();
+      const issued = document.getElementById('geozoneUploadIssued').value || null;
+      const validFrom = document.getElementById('geozoneUploadValidFrom').value || null;
+      const statusEl = document.getElementById('geozoneUploadStatus');
+      const btn = document.getElementById('geozoneUploadBtn');
+
+      const setStatus = (msg, color) => {
+        statusEl.textContent = msg;
+        statusEl.style.color = color || 'var(--text-muted)';
+      };
+
+      const file = fileInput.files[0];
+      if (!file) { setStatus('Please choose a .geojson file.', '#c0392b'); return; }
+      if (!codeRaw) { setStatus('Please enter a version code.', '#c0392b'); return; }
+
+      const id = codeRaw.replace(/[^A-Za-z0-9_\-]/g, '');
+      if (!id) { setStatus('Version code must contain letters or numbers.', '#c0392b'); return; }
+
+      btn.disabled = true;
+      setStatus('Reading and validating file…');
+
+      try {
+        // Validate the GeoJSON parses and has features before uploading
+        const text = await file.text();
+        let geojson;
+        try {
+          geojson = JSON.parse(text);
+        } catch (e) {
+          setStatus('That file is not valid JSON.', '#c0392b');
+          btn.disabled = false;
+          return;
+        }
+        if (!geojson || !Array.isArray(geojson.features) || geojson.features.length === 0) {
+          setStatus('No "features" found — is this an IAA zones GeoJSON?', '#c0392b');
+          btn.disabled = false;
+          return;
+        }
+
+        setStatus(`Uploading ${geojson.features.length} zones…`);
+        const storagePath = `geozones/${id}.geojson`;
+        const { error: uploadError } = await supabaseClient.storage
+          .from('aerialdeck-files')
+          .upload(storagePath, file, { contentType: 'application/geo+json', upsert: true });
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabaseClient.storage
+          .from('aerialdeck-files')
+          .getPublicUrl(storagePath);
+
+        const res = await fetch('/api/geozone-versions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id,
+            name: `IAA ${codeRaw}`,
+            fullName: `UAS Geographical Zones Ireland ${codeRaw}`,
+            issued,
+            validFrom,
+            storagePath,
+            url: urlData.publicUrl
+          })
+        });
+        if (!res.ok) throw new Error('Failed to save version metadata');
+
+        await loadGeozoneVersions();
+        populateGeozoneVersionSelect(id);
+        setStatus(`✓ Added "IAA ${codeRaw}". Select it above and Auto-Detect.`, '#2e7d32');
+        fileInput.value = '';
+        document.getElementById('geozoneUploadCode').value = '';
+      } catch (err) {
+        console.error('Geozone upload failed:', err);
+        setStatus('Upload failed: ' + (err.message || 'unknown error'), '#c0392b');
+      } finally {
+        btn.disabled = false;
       }
     }
 
@@ -4095,7 +4211,7 @@
       if (!select) return;
 
       select.innerHTML = '<option value="">-- Select Version --</option>' +
-        geozoneVersions.map(v => `<option value="${v.id}" ${v.id === currentVersionId ? 'selected' : ''}>${v.name} (valid from ${v.validFrom})</option>`).join('');
+        geozoneVersions.map(v => `<option value="${v.id}" ${v.id === currentVersionId ? 'selected' : ''}>${v.name}${v.validFrom ? ` (valid from ${v.validFrom})` : ''}</option>`).join('');
     }
 
     async function loadEvidence(planId) {

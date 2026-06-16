@@ -1313,6 +1313,76 @@ app.post('/api/flight-plans/:planId/evidence/airspaceZones', requireAuth, async 
   }
 });
 
+// ============ UPLOADED IAA GEOZONE VERSIONS ============
+// Uploaded GeoZone versions are stored as a small JSON manifest in the
+// aerialdeck-files bucket. The large .geojson files themselves are uploaded
+// to the same bucket directly from the browser. Built-in versions still come
+// from the static public/geozones/index.json (merged client-side).
+const GEOZONE_MANIFEST_PATH = 'geozones/uploaded-index.json';
+
+async function readGeozoneManifest() {
+  try {
+    const { data, error } = await supabase.storage
+      .from('aerialdeck-files')
+      .download(GEOZONE_MANIFEST_PATH);
+    if (error || !data) return { versions: [] };
+    const text = await data.text();
+    const parsed = JSON.parse(text);
+    return { versions: Array.isArray(parsed.versions) ? parsed.versions : [] };
+  } catch (err) {
+    // No manifest yet (first upload) — treat as empty
+    return { versions: [] };
+  }
+}
+
+app.get('/api/geozone-versions', requireAuth, async (req, res) => {
+  try {
+    const manifest = await readGeozoneManifest();
+    res.json(manifest);
+  } catch (err) {
+    console.error('Error reading geozone manifest:', err);
+    res.status(500).json({ error: 'Failed to read geozone versions' });
+  }
+});
+
+app.post('/api/geozone-versions', requireAuth, async (req, res) => {
+  try {
+    const v = req.body || {};
+    if (!v.id || !v.url || !v.storagePath) {
+      return res.status(400).json({ error: 'Missing required fields (id, url, storagePath)' });
+    }
+    const version = {
+      id: String(v.id),
+      name: v.name || `IAA ${v.id}`,
+      fullName: v.fullName || `UAS Geographical Zones Ireland ${v.id}`,
+      issued: v.issued || null,
+      validFrom: v.validFrom || null,
+      file: v.storagePath,
+      url: v.url,
+      uploaded: true,
+      uploadedAt: new Date().toISOString()
+    };
+
+    const manifest = await readGeozoneManifest();
+    // Replace any existing version with the same id, then add the new one
+    manifest.versions = manifest.versions.filter(x => x.id !== version.id);
+    manifest.versions.push(version);
+
+    const { error: writeError } = await supabase.storage
+      .from('aerialdeck-files')
+      .upload(GEOZONE_MANIFEST_PATH, Buffer.from(JSON.stringify(manifest, null, 2)), {
+        contentType: 'application/json',
+        upsert: true
+      });
+    if (writeError) throw writeError;
+
+    res.json(manifest);
+  } catch (err) {
+    console.error('Error saving geozone version:', err);
+    res.status(500).json({ error: 'Failed to save geozone version' });
+  }
+});
+
 app.post('/api/flight-plans/:planId/evidence/:category', requireAuth, upload.single('file'), async (req, res) => {
   const { planId, category } = req.params;
   const validCategories = ['flightGeography', 'emergencyResponsePlan', 'weather', 'nearbyEvents', 'notams', 'uf101Permission', 'uf101Application'];
