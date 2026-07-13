@@ -2783,7 +2783,10 @@
         flightLogs: planLogs.length >= 1,
         crewAssignment: !!(evidence.planning?.pilotInCommand),
         airspaceZones: !!(evidence.airspaceZones && (evidence.airspaceZones.detectedZones?.length > 0 || evidence.airspaceZones.manualZones?.length > 0)),
-        operationMap: (evidence.flightGeography?.length || 0) > 0,
+        // Satisfied by EITHER an uploaded operation-map file, OR a flight geography
+        // drawn in the planner (kmlCoordinates saved on flightGeographyMap).
+        operationMap: (evidence.flightGeography?.length || 0) > 0
+          || (evidence.flightGeographyMap?.kmlCoordinates?.length || 0) > 0,
         flightParams: !!(evidence.flightGeographyData?.latitude && evidence.flightGeographyData?.maxHeight),
         emergencyPlan: (evidence.emergencyResponsePlan?.length || 0) > 0,
         weather: (evidence.weather?.length || 0) > 0,
