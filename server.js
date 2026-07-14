@@ -376,13 +376,20 @@ app.delete('/api/flight-plans/:id', requireAuth, async (req, res) => {
 // Get flight logs
 app.get('/api/flight-logs', requireAuth, async (req, res) => {
   try {
-    const { plan_id, limit = 100 } = req.query;
+    // The dashboard fetches this with no limit and derives EVERYTHING from the result:
+    // per-plan compliance, pilot hours, FTS counts, the map. A default of 100 meant that
+    // once the logbook passed 100 entries, older flights silently vanished from the UI and
+    // their plans showed as having zero logs. Default must cover the whole logbook.
+    // NOTE: PostgREST caps responses at 1000 rows — past that this needs pagination.
+    const parsed = parseInt(req.query.limit);
+    const limit = Number.isFinite(parsed) && parsed > 0 ? parsed : 1000;
+    const { plan_id } = req.query;
 
     let query = supabase
       .from('flight_logs')
       .select('*, flight_plans(name)')
       .order('date_time_utc', { ascending: false })
-      .limit(parseInt(limit));
+      .limit(limit);
 
     if (plan_id) {
       query = query.eq('flight_plan_id', parseInt(plan_id));
