@@ -2205,7 +2205,7 @@
         <div class="form-row">
           <div class="form-group">
             <label>Date/Time (UTC) *</label>
-            <input type="datetime-local" id="editLogDateTime" required>
+            <input type="datetime-local" id="editLogDateTime" step="1" required>
           </div>
           <div class="form-group">
             <label>Duration (minutes) *</label>
@@ -3362,9 +3362,13 @@
 
       // Set date/time - convert UTC string to datetime-local format
       if (log.date_time_utc) {
-        const dt = new Date(log.date_time_utc);
-        const local = dt.toISOString().slice(0, 16);
-        document.getElementById('editLogDateTime').value = local;
+        // The field is labelled UTC and must stay UTC on BOTH read and write.
+        // Previously this wrote the UTC wall-clock into a datetime-local input and
+        // then re-parsed it as LOCAL time on save, shifting every edited log back by
+        // the local UTC offset (-1h during IST) and truncating the seconds.
+        // Keep full seconds precision (input has step="1").
+        document.getElementById('editLogDateTime').value =
+          new Date(log.date_time_utc).toISOString().slice(0, 19);
       }
 
       document.getElementById('editLogDuration').value = parseFloat(log.air_time_minutes) || 0;
@@ -3381,7 +3385,11 @@
 
       const updates = {
         flight_plan_id: parseInt(document.getElementById('editLogPlanSelect').value),
-        date_time_utc: document.getElementById('editLogDateTime').value ? new Date(document.getElementById('editLogDateTime').value).toISOString() : undefined,
+        // Append 'Z' so the value is parsed as UTC, matching the field's label and how
+        // it was populated. Without it, new Date() treats it as local time and shifts it.
+        date_time_utc: document.getElementById('editLogDateTime').value
+          ? new Date(document.getElementById('editLogDateTime').value + 'Z').toISOString()
+          : undefined,
         air_time_minutes: parseFloat(document.getElementById('editLogDuration').value),
         pic: document.getElementById('editLogPicSelect').value,
         assistant: document.getElementById('editLogAssistantSelect').value || null,
