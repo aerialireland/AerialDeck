@@ -18,14 +18,24 @@
  *   storage/<bucket>/<path>    every object, original folder structure
  *   manifest.json              row counts, object list, sizes, checksums
  */
+require('dotenv').config();   // .env holds SUPABASE_SERVICE_KEY (gitignored)
+
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
 const SUPABASE_URL = 'https://xvevvssehmtbpkcztzmj.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY
-  || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh2ZXZ2c3NlaG10YnBrY3p0em1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwNDAxMzMsImV4cCI6MjA4NTYxNjEzM30._ed3mYbiO_9XkxFus6-c5Io_Tp3WXkc_OzvE8qWIa1c';
+
+// Must be the service_role key. The anon key is being locked down and will not be able
+// to read the tables — a backup running as anon would silently produce empty files,
+// which is worse than no backup at all. Fail loudly instead.
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
+if (!SUPABASE_KEY) {
+  console.error('SUPABASE_SERVICE_KEY is not set. Run: npx vercel env pull .env');
+  console.error('Refusing to back up with the anon key — it would produce an empty backup.');
+  process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
