@@ -1363,19 +1363,53 @@ app.post('/api/flight-plans/:planId/evidence/airspaceZones', requireAuth, async 
 // from the static public/geozones/index.json (merged client-side).
 const GEOZONE_MANIFEST_PATH = 'geozones/uploaded-index.json';
 
-async function readGeozoneManifest() {
-  try {
-    const { data, error } = await supabase.storage
-      .from('aerialdeck-files')
-      .download(GEOZONE_MANIFEST_PATH);
-    if (error || !data) return { versions: [] };
-    const text = await data.text();
-    const parsed = JSON.parse(text);
-    return { versions: Array.isArray(parsed.versions) ? parsed.versions : [] };
-  } catch (err) {
-    // No manifest yet (first upload) — treat as empty
-    return { versions: [] };
+// Read a JSON file from storage, distinguishing "does not exist yet" from "read failed".
+//
+// This distinction is critical. Both the geozone manifest and the SORA metadata are
+// read-modify-WRITE with upsert:true. If a transient download error is treated as
+// "empty", the next write overwrites the manifest with a single record and silently
+// destroys every previously registered entry. Only a genuine 404 may yield empty;
+// anything else — network error, permission error, corrupt JSON — must throw so the
+// caller aborts instead of overwriting.
+//
+// Returns null if the object genuinely does not exist. Throws on any other failure.
+//
+// NOTE: we cannot infer "not found" from the download error. supabase-js returns an
+// opaque StorageUnknownError with message "{}" and no status code for a missing object —
+// identical in shape to a transient network failure. So absence is confirmed POSITIVELY
+// with list(); only then do we report empty. Anything else throws.
+async function readJsonFromStorage(bucket, filePath) {
+  const slash = filePath.lastIndexOf('/');
+  const dir = slash === -1 ? '' : filePath.slice(0, slash);
+  const name = slash === -1 ? filePath : filePath.slice(slash + 1);
+
+  const { data: listing, error: listError } = await supabase.storage
+    .from(bucket).list(dir, { limit: 1000, search: name });
+  if (listError) throw new Error(`Failed to list ${bucket}/${dir}: ${listError.message}`);
+
+  const exists = (listing || []).some(o => o.name === name);
+  if (!exists) return null;              // confirmed absent — legitimately empty
+
+  const { data, error } = await supabase.storage.from(bucket).download(filePath);
+  if (error || !data) {
+    // The object EXISTS but we could not read it. Never treat this as empty: the caller
+    // would write back a fresh object and destroy it.
+    throw new Error(`Failed to read existing ${bucket}/${filePath}: ${error?.message || 'no data'}`);
   }
+
+  const text = await data.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    // Corrupt JSON: refuse to proceed. Overwriting here would destroy the real data.
+    throw new Error(`Corrupt JSON in ${bucket}/${filePath} — refusing to overwrite`);
+  }
+}
+
+async function readGeozoneManifest() {
+  const parsed = await readJsonFromStorage('aerialdeck-files', GEOZONE_MANIFEST_PATH);
+  if (parsed === null) return { versions: [] };   // no manifest yet — first upload
+  return { versions: Array.isArray(parsed.versions) ? parsed.versions : [] };
 }
 
 app.get('/api/geozone-versions', requireAuth, async (req, res) => {
@@ -1569,36 +1603,28 @@ app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 // Company-level SORA documentation, stored in Supabase Storage as metadata JSON + files
 
 const SORA_METADATA_PATH = 'sora-docs/metadata.json';
-let soraMetadataCache = null;
 
+// No cache. The previous version cached the result in a module-level variable and
+// returned it forever, which caused two failures on Vercel:
+//   1. A single transient download error cached [] for the life of the warm instance;
+//      the next save then overwrote metadata.json with one record, destroying the index.
+//   2. Many Lambdas run concurrently. Instance A's stale cache would clobber the
+//      documents instance B had just added.
+// This file is a few KB — read it fresh every time.
 async function getSoraMetadata() {
-  if (soraMetadataCache !== null) return soraMetadataCache;
-  try {
-    const { data, error } = await supabase.storage
-      .from('aerialdeck-files')
-      .download(SORA_METADATA_PATH);
-    if (error) { soraMetadataCache = []; return []; }
-    const text = await data.text();
-    const parsed = JSON.parse(text);
-    // Migrate from old category-keyed object to flat array if needed
-    if (Array.isArray(parsed)) { soraMetadataCache = parsed; return parsed; }
-    // Old format: { category: [files...] } — flatten to array
-    const flat = [];
-    for (const cat of Object.keys(parsed)) {
-      for (const file of parsed[cat]) {
-        flat.push(file);
-      }
-    }
-    soraMetadataCache = flat;
-    return flat;
-  } catch (err) {
-    soraMetadataCache = [];
-    return [];
+  const parsed = await readJsonFromStorage('aerialdeck-files', SORA_METADATA_PATH);
+  if (parsed === null) return [];              // nothing uploaded yet
+  if (Array.isArray(parsed)) return parsed;
+
+  // Legacy format: { category: [files...] } — flatten to a flat array
+  const flat = [];
+  for (const cat of Object.keys(parsed)) {
+    if (Array.isArray(parsed[cat])) flat.push(...parsed[cat]);
   }
+  return flat;
 }
 
 async function saveSoraMetadata(metadata) {
-  soraMetadataCache = metadata;
   const buffer = Buffer.from(JSON.stringify(metadata), 'utf-8');
   const { error } = await supabase.storage
     .from('aerialdeck-files')
