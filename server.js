@@ -1055,6 +1055,20 @@ app.patch('/api/batteries/:id', requireAuth, async (req, res) => {
 });
 
 // Dashboard stats
+// Last-backup status. Written by backup-full.js (which runs locally, not on Vercel)
+// to aerialdeck-files/backup-status.json. Returns { never: true } if no backup has run.
+app.get('/api/backup-status', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase.storage.from('aerialdeck-files').download('backup-status.json');
+    if (error || !data) return res.json({ never: true });
+    const status = JSON.parse(await data.text());
+    res.json(status);
+  } catch (err) {
+    console.error('Error reading backup status:', err);
+    res.json({ never: true });
+  }
+});
+
 app.get('/api/dashboard/stats', requireAuth, async (req, res) => {
   try {
     const { count: planCount } = await supabase.from('flight_plans').select('*', { count: 'exact', head: true });

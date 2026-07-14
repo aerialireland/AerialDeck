@@ -186,6 +186,16 @@
     }
     .header h1 { font-size: 1.25rem; color: var(--accent); font-weight: 700; }
     .header-logo { height: 44px; width: auto; }
+    .backup-status {
+      display: flex; align-items: center; gap: 0.4rem;
+      font-size: 0.78rem; color: var(--text-secondary);
+      padding: 0.35rem 0.6rem; border: 1px solid var(--border);
+      border-radius: 999px; white-space: nowrap; cursor: default;
+    }
+    .backup-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex: none; }
+    .backup-dot.ok { background: #22c55e; }
+    .backup-dot.warn { background: #f59e0b; }
+    .backup-dot.stale { background: #dc2626; }
     .header-actions { display: flex; gap: 1rem; align-items: center; }
 
     .settings-wrapper { position: relative; }
@@ -1339,6 +1349,10 @@
     <header class="header">
       <img src="/logo.png" alt="Aerial" class="header-logo">
       <div class="header-actions">
+        <div class="backup-status" id="backupStatus" title="Last full backup (database + storage files)">
+          <span class="backup-dot" id="backupDot"></span>
+          <span id="backupStatusText">Backup: checking…</span>
+        </div>
         <div class="settings-wrapper">
           <button class="settings-btn" id="settingsBtn" onclick="toggleSettingsPanel()" title="Settings">⚙️</button>
           <div class="settings-panel" id="settingsPanel">
@@ -2553,6 +2567,7 @@
       // Hide demo banner - we have real data now
       demoBanner.style.display = 'none';
 
+      loadBackupStatus();
       renderBentoGrid();
       renderFlightPlans();
       renderAllFlightLogs();
@@ -2564,6 +2579,47 @@
       populateFormDropdowns();
       initMap();
       loadGeozoneVersions(); // Load IAA geozone versions for flight plan forms
+    }
+
+    // Last-backup indicator in the header. Backups run locally (backup-full.js) and
+    // publish a status marker to storage; green <36h, amber <7d, red older or never.
+    async function loadBackupStatus() {
+      const dot = document.getElementById('backupDot');
+      const text = document.getElementById('backupStatusText');
+      const wrap = document.getElementById('backupStatus');
+      if (!dot || !text) return;
+      try {
+        const res = await fetch('/api/backup-status');
+        const s = await res.json();
+
+        if (s.never || !s.completedAt) {
+          dot.className = 'backup-dot stale';
+          text.textContent = 'No backup found';
+          wrap.title = 'No backup has ever been recorded. Run: node backup-full.js';
+          return;
+        }
+
+        const when = new Date(s.completedAt);
+        const hours = (Date.now() - when.getTime()) / 3600000;
+        let ago;
+        if (hours < 1) ago = 'just now';
+        else if (hours < 24) ago = `${Math.floor(hours)}h ago`;
+        else {
+          const d = Math.floor(hours / 24);
+          ago = d === 1 ? 'yesterday' : `${d} days ago`;
+        }
+
+        dot.className = 'backup-dot ' + (s.storageErrors > 0 ? 'warn' : hours < 36 ? 'ok' : hours < 168 ? 'warn' : 'stale');
+        text.textContent = `Backup: ${ago}`;
+
+        const mb = s.storageBytes ? (s.storageBytes / 1048576).toFixed(0) + ' MB' : '?';
+        wrap.title = `Last full backup: ${when.toLocaleString('en-GB')}\n`
+          + `${s.totalRows} database rows, ${s.storageFiles} storage files (${mb})`
+          + (s.storageErrors > 0 ? `\n⚠ ${s.storageErrors} file(s) failed to back up` : '');
+      } catch (e) {
+        dot.className = 'backup-dot';
+        text.textContent = 'Backup: unknown';
+      }
     }
 
     function getPopularLocations(plans) {
