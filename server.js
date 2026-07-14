@@ -1257,12 +1257,19 @@ app.post('/api/incident-reports', requireAuth, async (req, res) => {
 // Evidence data stored in flight_plans.evidence JSONB column
 // Files stored in Supabase Storage
 
-const defaultEvidence = {
-  planning: { pilotInCommand: null, assistant: null, ftsOperator: null, ftsModel: '' },
-  flightGeographyData: { latitude: null, longitude: null, operationalScenario: null, flightObjective: 'Photo & Video', flightCondition: 'Specific category', maxHeight: null, groundRiskBuffer: null, maxFlightSpeed: null, contingencyVolume: null, adjacentArea: null },
-  airspaceZones: [],
-  flightGeography: [], emergencyResponsePlan: [], weather: [], nearbyEvents: [], notams: [], uf101Permission: [], uf101Application: []
-};
+// Returns a FRESH default every call. This must be a factory, not a shared constant:
+// callers mutate the result in place (evidence[category].push(...), files.splice(...)).
+// Previously this was a module-level object copied with a SHALLOW spread, so every
+// plan with no evidence shared the same nested arrays — one plan's uploaded files
+// would start appearing on other plans on the same warm serverless instance.
+function makeDefaultEvidence() {
+  return {
+    planning: { pilotInCommand: null, assistant: null, ftsOperator: null, ftsModel: '' },
+    flightGeographyData: { latitude: null, longitude: null, operationalScenario: null, flightObjective: 'Photo & Video', flightCondition: 'Specific category', maxHeight: null, groundRiskBuffer: null, maxFlightSpeed: null, contingencyVolume: null, adjacentArea: null },
+    airspaceZones: [],
+    flightGeography: [], emergencyResponsePlan: [], weather: [], nearbyEvents: [], notams: [], uf101Permission: [], uf101Application: []
+  };
+}
 
 // Helper to get evidence from Supabase
 async function getEvidence(planId) {
@@ -1273,7 +1280,7 @@ async function getEvidence(planId) {
     .single();
 
   if (error) throw error;
-  return data?.evidence || { ...defaultEvidence };
+  return data?.evidence || makeDefaultEvidence();
 }
 
 // Helper to save evidence to Supabase
@@ -1292,7 +1299,7 @@ app.get('/api/flight-plans/:planId/evidence', requireAuth, async (req, res) => {
     res.json(evidence);
   } catch (err) {
     console.error('Error fetching evidence:', err);
-    res.json(defaultEvidence);
+    res.json(makeDefaultEvidence());
   }
 });
 
