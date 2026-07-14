@@ -2461,6 +2461,22 @@
       }
     }
 
+    // Surface a failed save to the user. Several handlers used to do `if (res.ok) {...}`
+    // with no else, and only console.error in the catch — so a failed save looked exactly
+    // like nothing happening: the modal stayed open, no error, and the user could not tell
+    // whether their data had been recorded. In a compliance system a save must never fail
+    // quietly. Pulls the server's error message when there is one.
+    async function reportSaveFailure(resOrErr, fallback) {
+      let msg = fallback;
+      if (resOrErr && typeof resOrErr.json === 'function') {
+        try { const body = await resOrErr.json(); if (body && body.error) msg = body.error; } catch (_) {}
+      } else if (resOrErr && resOrErr.message) {
+        msg = resOrErr.message;
+      }
+      console.error('Save failed:', msg);
+      alert('Error: ' + msg + '\n\nYour change was NOT saved. Please try again.');
+    }
+
     let maintenanceLogs = [], trainingLogs = [], incidentReports = [], pilots = [];
 
     async function loadAllData() {
@@ -3163,6 +3179,9 @@
       const batteryId = inputEl.dataset.batteryId;
       const value = parseFloat(inputEl.value) || 0;
       if (value < 0) { inputEl.value = 0; return; }
+      // Remember what was on screen: if the save fails we must put it back, otherwise the
+      // field keeps the new number and the user believes it was recorded when it was not.
+      const previous = (batteryLogs.find(b => b.id == batteryId) || {}).open_category_hours ?? 0;
       try {
         const res = await fetch(`/api/batteries/${batteryId}`, {
           method: 'PATCH',
@@ -3189,7 +3208,10 @@
         if (status) { status.style.opacity = '1'; setTimeout(() => { status.style.opacity = '0'; }, 2000); }
         // Re-render bento grid to update chart
         renderBentoGrid();
-      } catch (err) { console.error('Error saving battery hours:', err); }
+      } catch (err) {
+        inputEl.value = previous;   // revert — never leave an unsaved value looking saved
+        await reportSaveFailure(err, 'Failed to save battery hours');
+      }
     }
 
     function showPlanDetail(planId) {
@@ -3303,8 +3325,10 @@
           updateDetailHeader();
           renderFlightPlans();
           closeModal('editFlightPlanModal');
+        } else {
+          await reportSaveFailure(res, 'Failed to update flight plan');
         }
-      } catch (err) { console.error('Error updating flight plan:', err); }
+      } catch (err) { await reportSaveFailure(err, 'Failed to update flight plan'); }
     }
 
     // ============ EDIT FLIGHT LOG ============
@@ -4097,9 +4121,11 @@
           maintenanceLogs.push(newLog);
           renderMaintenanceLogs();
           closeModal('maintenanceModal');
+        } else {
+          await reportSaveFailure(res, 'Failed to save maintenance log');
         }
       } catch (err) {
-        console.error('Error saving maintenance log:', err);
+        await reportSaveFailure(err, 'Failed to save maintenance log');
       }
     }
 
@@ -4124,9 +4150,11 @@
           trainingLogs.push(newLog);
           renderTrainingLogs();
           closeModal('trainingModal');
+        } else {
+          await reportSaveFailure(res, 'Failed to save training log');
         }
       } catch (err) {
-        console.error('Error saving training log:', err);
+        await reportSaveFailure(err, 'Failed to save training log');
       }
     }
 
@@ -4151,9 +4179,11 @@
           incidentReports.push(newReport);
           renderIncidentReports();
           closeModal('incidentModal');
+        } else {
+          await reportSaveFailure(res, 'Failed to save incident report');
         }
       } catch (err) {
-        console.error('Error saving incident report:', err);
+        await reportSaveFailure(err, 'Failed to save incident report');
       }
     }
 
@@ -4694,8 +4724,10 @@
           currentEvidence.planning = await res.json();
           renderEvidence();
           closeModal('planningModal');
+        } else {
+          await reportSaveFailure(res, 'Failed to save planning details');
         }
-      } catch (err) { console.error('Error saving planning:', err); }
+      } catch (err) { await reportSaveFailure(err, 'Failed to save planning details'); }
     }
 
     function showFlightGeographyForm() {
@@ -4743,8 +4775,10 @@
           renderEvidence();
           updateDetailHeader(); // Update header with new lat/long and max altitude
           closeModal('flightGeographyModal');
+        } else {
+          await reportSaveFailure(res, 'Failed to save flight parameters');
         }
-      } catch (err) { console.error('Error saving geography:', err); }
+      } catch (err) { await reportSaveFailure(err, 'Failed to save flight parameters'); }
     }
 
     function showAirspaceZonesForm() {
@@ -4815,8 +4849,10 @@
           currentEvidence.airspaceZones = result.zones;
           renderEvidence();
           closeModal('airspaceZonesModal');
+        } else {
+          await reportSaveFailure(res, 'Failed to save airspace zones');
         }
-      } catch (err) { console.error('Error saving zones:', err); }
+      } catch (err) { await reportSaveFailure(err, 'Failed to save airspace zones'); }
     }
 
     async function uploadEvidence(category, input) {
@@ -4895,9 +4931,11 @@
         if (res.ok) {
           currentEvidence[category] = currentEvidence[category].filter(f => f.id !== fileId);
           renderEvidence();
+        } else {
+          await reportSaveFailure(res, 'Failed to delete file');
         }
       } catch (err) {
-        console.error('Error deleting file:', err);
+        await reportSaveFailure(err, 'Failed to delete file');
       }
     }
 
@@ -5079,9 +5117,11 @@
         if (res.ok) {
           soraDocuments = soraDocuments.filter(f => f.id !== fileId);
           renderSoraDocuments();
+        } else {
+          await reportSaveFailure(res, 'Failed to delete SORA document');
         }
       } catch (err) {
-        console.error('Error deleting SORA doc:', err);
+        await reportSaveFailure(err, 'Failed to delete SORA document');
       }
     }
 
