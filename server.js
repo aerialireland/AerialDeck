@@ -1714,6 +1714,78 @@ app.delete('/api/sora-documents/:fileId', requireAuth, async (req, res) => {
   }
 });
 
+// ============ PORTAL PAGES ============
+// Pages under views/ are served from here rather than from public/, because
+// express.static exposes everything in public/ without checking the session.
+// Anyone hitting these without a session is bounced to the login page at '/'.
+const requirePage = (req, res, next) => {
+  if (req.session.authenticated) return next();
+  res.redirect('/');
+};
+
+const sendView = (name) => (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', name));
+};
+
+// The AerialDeck portal — the front page linking to each section.
+// Note '/' is deliberately left alone: it still serves the Flight Plan section
+// exactly as before, so existing bookmarks keep working.
+app.get('/home', requirePage, sendView('home.html'));
+
+// ============ U.F.101 CREATOR ============
+// A copy of uf101-creator.html from the UF101-Console repo. The live console at
+// uf101.aerial.ie is untouched and remains the only thing that can SAVE — this
+// copy is read-only. See the READ_ONLY note in views/uf101-creator.html.
+app.get('/uf101', requirePage, sendView('uf101-creator.html'));
+
+// The creator's bulk assets live in Supabase Storage rather than the repo,
+// because the IAA zone dataset is 7.2 MB and the archive another 28 MB.
+// Uploaded by scripts/upload-uf101-assets.mjs.
+const UF101_ASSETS = {
+  'iaa-zones.js': { path: 'uf101/iaa-zones.js', type: 'application/javascript' },
+  'flights-data.json': { path: 'uf101/flights-data.json', type: 'application/json' }
+};
+
+app.get('/uf101/:asset', requirePage, async (req, res) => {
+  const asset = UF101_ASSETS[req.params.asset];
+  if (!asset) return res.status(404).send('Not found');
+  try {
+    const { data, error } = await supabase.storage.from('aerialdeck-files').download(asset.path);
+    if (error) throw error;
+    const buf = Buffer.from(await data.arrayBuffer());
+    res.set('Content-Type', asset.type);
+    // The zone dataset is immutable for a given ?v=, so let the browser keep it.
+    // flights-data.json is already cache-busted by the caller with a timestamp.
+    res.set('Cache-Control', 'private, max-age=3600');
+    res.send(buf);
+  } catch (err) {
+    console.error(`Error serving UF101 asset ${req.params.asset}:`, err.message);
+    res.status(502).send('Asset unavailable');
+  }
+});
+
+// Frozen historical zone releases, linked from each saved flight so the zones
+// that applied when it was drawn can always be retrieved.
+app.get('/uf101/geojson-archive/:file', requirePage, async (req, res) => {
+  // Only ever the published release naming pattern, e.g. 20260525V1.geojson
+  if (!/^\d{8}V\d+\.geojson$/.test(req.params.file)) {
+    return res.status(400).send('Bad archive name');
+  }
+  try {
+    const { data, error } = await supabase.storage
+      .from('aerialdeck-files')
+      .download(`uf101/geojson-archive/${req.params.file}`);
+    if (error) throw error;
+    const buf = Buffer.from(await data.arrayBuffer());
+    res.set('Content-Type', 'application/geo+json');
+    res.set('Cache-Control', 'private, max-age=86400');
+    res.send(buf);
+  } catch (err) {
+    console.error(`Error serving UF101 archive ${req.params.file}:`, err.message);
+    res.status(502).send('Archive unavailable');
+  }
+});
+
 // Serve frontend
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

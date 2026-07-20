@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>AerialDeck</title>
+
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <meta name="theme-color" content="#97D49F">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* Variables copied from public/index.html so the portal matches the rest of
+       AerialDeck exactly. If the palette changes there, mirror it here. */
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f8faf8;
+      --bg-card: #ffffff;
+      --text-primary: #001803;
+      --text-secondary: #3d5a40;
+      --text-muted: #6b8a6e;
+      --accent: #6ba671;
+      --accent-light: #e8f5e9;
+      --accent-dark: #4a8550;
+      --border: #e0e8e0;
+      --border-light: #f0f4f0;
+    }
+
+    body.dark {
+      --bg-primary: #1c1c1c;
+      --bg-secondary: #141414;
+      --bg-card: #212121;
+      --text-primary: #e3e3e3;
+      --text-secondary: #aaaaaa;
+      --text-muted: #737373;
+      --accent: #6ba671;
+      --accent-light: #1e2e20;
+      --accent-dark: #8bc895;
+      --border: #303030;
+      --border-light: #272727;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header-logo { height: 44px; width: auto; }
+    .header-actions { display: flex; gap: 1rem; align-items: center; }
+
+    .logout-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.875rem;
+    }
+    .logout-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
+
+    .portal {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      max-width: 960px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 3rem 2rem 4rem;
+    }
+
+    .portal-intro { margin-bottom: 2.5rem; }
+    .portal-intro h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 0.5rem;
+    }
+    .portal-intro p { color: var(--text-muted); font-size: 1rem; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.5rem;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 28px rgba(0, 24, 3, 0.09);
+      border-color: var(--accent);
+    }
+    body.dark .card:hover { box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45); }
+
+    .card-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: var(--accent-light);
+      color: var(--accent-dark);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 0.25rem;
+    }
+    .card h2 { font-size: 1.25rem; font-weight: 600; color: var(--text-primary); }
+    .card p { color: var(--text-secondary); font-size: 0.9rem; line-height: 1.55; }
+
+    .card-meta {
+      margin-top: auto;
+      padding-top: 1rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .badge {
+      display: inline-block;
+      background: var(--accent-light);
+      color: var(--accent-dark);
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      letter-spacing: 0.02em;
+    }
+
+    @media (max-width: 720px) {
+      .cards { grid-template-columns: 1fr; }
+      .portal { padding: 2rem 1.25rem 3rem; }
+      .header { padding: 1rem 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <img src="/logo.png" alt="Aerial" class="header-logo">
+    <div class="header-actions">
+      <button class="logout-btn" id="logoutBtn">Sign Out</button>
+    </div>
+  </header>
+
+  <main class="portal">
+    <div class="portal-intro">
+      <h1>AerialDeck</h1>
+      <p>Flight planning, record keeping and airspace applications.</p>
+    </div>
+
+    <div class="cards">
+
+      <a class="card" href="/uf101">
+        <div class="card-icon">📄</div>
+        <h2>U.F.101 Creator <span class="badge">NEW</span></h2>
+        <p>
+          Build an IAA Form U.F.101 application to fly inside a restricted or
+          prohibited zone. Draw the operating area, detect which UAS geographical
+          zones it intersects, and export the completed form.
+        </p>
+        <div class="card-meta">Form Version 13 &middot; IAA zones 25 May 2026</div>
+      </a>
+
+      <a class="card" href="/">
+        <div class="card-icon">🚁</div>
+        <h2>Flight Plan</h2>
+        <p>
+          The flight planning dashboard — flight plans and evidence, flight logs,
+          drones, batteries, maintenance, training, incidents and SORA
+          documentation.
+        </p>
+        <div class="card-meta">Dashboard, plans and records</div>
+      </a>
+
+    </div>
+  </main>
+
+  <script>
+    // Match the dark-mode preference set in the Flight Plan section. Same
+    // localStorage key, so the choice carries across both sections.
+    if (localStorage.getItem('aerialDeckDarkMode') === '1') {
+      document.body.classList.add('dark');
+    }
+
+    // The server already redirects unauthenticated visitors to the login page,
+    // so this is a second line of defence for a session that expires while the
+    // page is open.
+    (async function checkAuth() {
+      try {
+        const res = await fetch('/api/auth/status');
+        const data = await res.json();
+        if (!data.authenticated) window.location.href = '/';
+      } catch (e) { /* offline — leave the page as it is */ }
+    })();
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await fetch('/api/logout', { method: 'POST' });
+      window.location.href = '/';
+    });
+  </script>
+
+</body>
+</html>
