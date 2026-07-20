@@ -1,0 +1,1805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>U.F.101 Creator - UAS Flight Application Console</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+    <!-- AERIALDECK: served from Supabase Storage via server.js rather than sitting
+         in the repo — the dataset is 7.2 MB and grows with every IAA reissue.
+         Upload with scripts/upload-uf101-assets.mjs. -->
+    <script src="/uf101/iaa-zones.js?v=20260525"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #e5e7eb;
+            color: #1a202c;
+        }
+        .app-wrapper { display: flex; flex-direction: column; min-height: 100vh; }
+        .header {
+            background: transparent;
+            color: #1a202c;
+            padding: 32px 5%;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .header-text h1 { font-size: 28px; font-weight: 600; }
+        .header-text p { opacity: 0.6; font-size: 16px; }
+        .main-layout { display: grid; grid-template-columns: 25fr 26fr 39fr; gap: 16px; padding: 16px 5% 60px 5%; flex: 1; }
+        @media (max-width: 1200px) { .main-layout { grid-template-columns: 25fr 65fr; } }
+        @media (max-width: 900px) { .main-layout { grid-template-columns: 1fr; } .sidebar { display: none; } }
+        .sidebar { background: #0c3210; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; max-height: calc(100vh - 185px); }
+        .sidebar-header { font-size: 14px; font-weight: 600; color: #98d59f; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .sidebar-flights { flex: 1; overflow-y: auto; min-height: 0; }
+        .sidebar-search { padding: 6px 10px; border-radius: 6px; border: none; font-size: 12px; width: 100px; background: rgba(255,255,255,0.1); color: white; }
+        .sidebar-search::placeholder { color: rgba(255,255,255,0.5); }
+        .sidebar-flight { padding: 12px; border-radius: 8px; margin-bottom: 8px; cursor: pointer; border: 2px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); transition: all 0.2s; }
+        .sidebar-flight:hover { border-color: #98d59f; background: rgba(255,255,255,0.1); }
+        .sidebar-flight.active { border-color: #98d59f; background: rgba(152,213,159,0.2); }
+        .sidebar-flight-name { font-weight: 500; font-size: 13px; color: white; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sidebar-flight-meta { font-size: 11px; color: rgba(255,255,255,0.6); }
+        .sidebar-flight-actions { display: flex; gap: 4px; margin-top: 8px; }
+        .sidebar-empty { text-align: center; padding: 40px 20px; color: rgba(255,255,255,0.5); font-size: 13px; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+        .modal { background: white; border-radius: 12px; padding: 24px; width: 400px; max-width: 90%; }
+        .modal h3 { margin-bottom: 16px; color: #2d3748; }
+        .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+        .welcome-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; grid-column: span 2; background: white; border-radius: 12px; padding: 60px; }
+        .panel { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; display: flex; flex-direction: column; }
+        .panel-header {
+            background: #f7fafc;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: 600;
+            color: #2d3748;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .panel-body { padding: 20px; overflow-y: auto; flex: 1; }
+        .panel-body-map { display: flex; flex-direction: column; overflow: hidden; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group.full-width { grid-column: 1 / -1; }
+        .form-group label { display: block; font-size: 13px; font-weight: 500; color: #4a5568; margin-bottom: 6px; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #0c3210;
+            box-shadow: 0 0 0 3px rgba(12,50,16,0.1);
+        }
+        .form-group small { display: block; color: #718096; font-size: 11px; margin-top: 4px; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: #2d3748; color: white; }
+        .btn-primary:hover { background: #1a202c; }
+        .btn-secondary { background: #edf2f7; color: #4a5568; }
+        .btn-secondary:hover { background: #e2e8f0; }
+        .btn-success { background: #4a9eff; color: white; font-weight: 600; }
+        .btn-success:hover { background: #3182ce; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+        #map { flex: 1; min-height: 300px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .zones-control { background: white; padding: 6px 10px; border-radius: 4px; box-shadow: 0 1px 5px rgba(0,0,0,0.3); cursor: pointer; font-size: 12px; font-weight: 500; border: none; display: flex; align-items: center; gap: 4px; }
+        .zones-control:hover { background: #f5f5f5; }
+        .zones-control.active { background: #0c3210; color: white; }
+        .map-instructions {
+            background: #e8f5e9;
+            border: 1px solid #90cdf4;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            color: #2c5282;
+        }
+        .coordinates-display {
+            background: #f7fafc;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 16px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .coordinates-display pre { white-space: pre-wrap; word-break: break-all; }
+        .profile-badge { background: #c6f6d5; color: #22543d; padding: 4px 12px; border-radius: 20px; font-size: 12px; }
+        .export-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
+        .export-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .export-card {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .export-card:hover { border-color: #2d3748; background: #edf2f7; }
+        .export-card-icon { font-size: 24px; margin-bottom: 6px; color: #4a5568; }
+        .export-card-title { font-weight: 600; color: #2d3748; font-size: 12px; }
+        .export-card-desc { font-size: 10px; color: #718096; margin-top: 2px; }
+        .tabs { display: flex; border-bottom: 1px solid #e2e8f0; }
+        .tab {
+            padding: 12px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            font-weight: 500;
+            color: #718096;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: #2d3748; }
+        .tab.active { color: #0c3210; border-bottom-color: #0c3210; }
+        .shape-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+        .shape-btn {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .shape-btn:hover { border-color: #90cdf4; }
+        .shape-btn.active { border-color: #0c3210; background: #e8f5e9; }
+        .shape-btn-icon { font-size: 24px; display: block; margin-bottom: 4px; }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #2d3748;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .datetime-row { display: flex; gap: 12px; align-items: flex-end; }
+        .datetime-row .form-group { flex: 1; margin-bottom: 0; max-width: 200px; }
+        .leaflet-draw-toolbar a {
+            background-image: none !important;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        .leaflet-draw-draw-polygon::before { content: '⬡'; }
+        .leaflet-draw-draw-circle::before { content: '⭕'; }
+        .leaflet-draw-edit-edit::before { content: '✏️'; }
+        .leaflet-draw-edit-remove::before { content: '🗑️'; }
+        .leaflet-draw-actions a { background-image: none !important; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // IAA Logo as base64 PNG (the blue swirl logo)
+        const IAA_LOGO_BASE64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARRHVja3kAAQAEAAAACgAA/+EEI2h0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8APD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgMTAuMC1jMDAwIDc5LmQwNGNjMTY5OCwgMjAyNS8wNy8wMi0xMjoxODoxMyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIgeG1wTU06T3JpZ2luYWxEb2N1bWVudElEPSJ1dWlkOjY1RTYzOTA2ODZDRjExREJBNkUyRDg4N0NFQUNCNDA3IiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjdDRDA5MjA0Rjk1NzExRjBBNjlDQzYzNThGRDNEOEJDIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjdDRDA5MjAzRjk1NzExRjBBNjlDQzYzNThGRDNEOEJDIiB4bXA6Q3JlYXRvclRvb2w9IkFkb2JlIElsbHVzdHJhdG9yIDI2LjMgKE1hY2ludG9zaCkiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDo0ZWJiZmM0Ny1iODVjLTQ5MTEtODc4My0yOTdlZTgzZmQxYzEiIHN0UmVmOmRvY3VtZW50SUQ9ImFkb2JlOmRvY2lkOnBob3Rvc2hvcDoyNmVjOTYwZS1j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';
+
+        // Irish UAS Geographical Zones
+        const UAS_ZONES = [
+            { id: 'U28', name: 'Dublin Amber Zone', description: 'Dublin City controlled airspace' },
+            { id: 'U03', name: 'Cork Amber Zone', description: 'Cork Airport controlled airspace' },
+            { id: 'U35', name: 'Shannon Amber Zone', description: 'Shannon Airport controlled airspace' },
+            { id: 'U14', name: 'Kerry Amber Zone', description: 'Kerry Airport controlled airspace' },
+            { id: 'U24', name: 'Knock Amber Zone', description: 'Ireland West Airport controlled airspace' },
+            { id: 'U34', name: 'Waterford Amber Zone', description: 'Waterford Airport controlled airspace' },
+            { id: 'U11', name: 'Galway Amber Zone', description: 'Galway Airport controlled airspace' },
+            { id: 'U06', name: 'Donegal Amber Zone', description: 'Donegal Airport controlled airspace' },
+            { id: 'U36', name: 'Sligo Amber Zone', description: 'Sligo Airport controlled airspace' },
+            { id: 'U01', name: 'Baldonnel Zone', description: 'Casement Aerodrome military zone' },
+            { id: 'U40', name: 'Weston Zone', description: 'Weston Airport controlled airspace' },
+            { id: 'U42', name: 'Arbour Hill', description: 'Arbour Hill restricted zone' },
+            { id: 'U4', name: 'IMMA', description: 'Irish Museum of Modern Art zone' },
+            { id: 'custom', name: 'Other (Manual Entry)', description: 'Enter zone details manually' }
+        ];
+
+        // Company Details (Locked)
+        const COMPANY = {
+            operatorName: 'Green Graph Adore Limited',
+            registrationNumber: 'IRLfcccxcahedqy8',
+            authNumber: 'IRL.UAS.AUTH9021'
+        };
+
+        // UAS Models
+        const UAS_MODELS = [
+            { value: '', label: 'Select drone...' },
+            { value: 'DJI Mavic 3 Pro', label: 'DJI Mavic 3 Pro' },
+            { value: 'DJI Mavic 3 Enterprise', label: 'DJI Mavic 3 Enterprise' }
+        ];
+
+        // Pilots
+        const PILOTS = [
+            { id: 'tk', name: 'Tony Kinlan', phone: '0861649569' },
+            { id: 'roc', name: "Rob O'Connor", phone: '0877582972' },
+            { id: 'fmcc', name: 'Fergal McCarthy', phone: '0872052331' }
+        ];
+
+        // Phone options for dropdowns
+        const PHONE_OPTIONS = [
+            { value: '', label: 'Select...' },
+            { value: '0861649569', label: '0861649569 (TK)' },
+            { value: '0877582972', label: '0877582972 (ROC)' },
+            { value: '0872052331', label: '0872052331 (FMcC)' }
+        ];
+
+        // Convert decimal degrees to DMS
+        function decimalToDMS(decimal, isLat) {
+            const absolute = Math.abs(decimal);
+            const degrees = Math.floor(absolute);
+            const minutesFloat = (absolute - degrees) * 60;
+            const minutes = Math.floor(minutesFloat);
+            const seconds = ((minutesFloat - minutes) * 60).toFixed(2);
+            const direction = isLat ? (decimal >= 0 ? 'N' : 'S') : (decimal >= 0 ? 'E' : 'W');
+            return degrees + '° ' + minutes + "' " + seconds + '" ' + direction;
+        }
+
+        // Format coordinates for display
+        function formatCoordinate(lat, lng) {
+            return decimalToDMS(lat, true) + ', ' + decimalToDMS(lng, false);
+        }
+
+        // Main App Component
+        function App() {
+            const [activeTab, setActiveTab] = useState('operator');
+            const [shapeType, setShapeType] = useState('polygon');
+            const [toast, setToast] = useState(null);
+            const [drawnLayer, setDrawnLayer] = useState(null);
+            const [coordinates, setCoordinates] = useState([]);
+            const [circleData, setCircleData] = useState(null);
+            const mapRef = useRef(null);
+            const mapInstanceRef = useRef(null);
+            const drawnItemsRef = useRef(null);
+            const drawControlRef = useRef(null);
+            const zonesLayerRef = useRef(null);
+
+            // Form State
+            const [formData, setFormData] = useState({
+                operatorName: COMPANY.operatorName,
+                registrationNumber: COMPANY.registrationNumber,
+                authNumber: COMPANY.authNumber,
+                sailLevel: 'SORA – SAIL II',
+                vlosBvlos: 'VLOS',
+                uasModel: 'DJI Mavic 3 Pro',
+                pilotNames: "Tony Kinlan & Rob O'Connor",
+                phonePrimary: '0861649569',
+                phoneAlternate: '0877582972',
+                zoneId: '',
+                zoneName: '',
+                detectedZones: '',
+                areaDescription: '',
+                maxAltitude: '',
+                maxHeight: '400ft',
+                startDateTime: '',
+                endDateTime: '',
+                proposedDateTime: '',
+                duration: '',
+                circleCenter: '',
+                circleRadius: '',
+                polygonCoords: ''
+            });
+
+            // Track selected pilots
+            const [selectedPilots, setSelectedPilots] = useState(['tk', 'roc']);
+            const [savedFlights, setSavedFlights] = useState([]);
+            const [currentFlightId, setCurrentFlightId] = useState(null);
+            const [showSaveModal, setShowSaveModal] = useState(false);
+            const [saveName, setSaveName] = useState('');
+            const [flightSearch, setFlightSearch] = useState('');
+            const [showRenameModal, setShowRenameModal] = useState(false);
+            const [renameFlightId, setRenameFlightId] = useState(null);
+            const [renameName, setRenameName] = useState('');
+            const savedFlightsRef = useRef([]);
+            // Event handlers registered inside useEffects close over the *initial* formData.
+            // Keep a ref in sync so handlers can read the latest values (especially dates).
+            const formDataRef = useRef({});
+
+            // Get current GeoJSON version for flight records
+            const getGeojsonVersion = () => {
+                if (typeof IAA_ZONES_DATA !== 'undefined' && IAA_ZONES_DATA.name) {
+                    return {
+                        name: IAA_ZONES_DATA.name,
+                        issued: IAA_ZONES_DATA.datasetMetadata?.issued || null,
+                        validFrom: IAA_ZONES_DATA.datasetMetadata?.validFrom || null
+                    };
+                }
+                return null;
+            };
+
+            // Load flights from shared JSON file on NAS
+            useEffect(() => {
+                const loadFlights = async () => {
+                    try {
+                        const response = await fetch('/uf101/flights-data.json?' + Date.now()); // Cache bust
+                        if (response.ok) {
+                            const flights = await response.json();
+                            setSavedFlights(flights);
+                            savedFlightsRef.current = flights;
+                        }
+                    } catch(e) { console.log('No flights-data.json found'); }
+                };
+                loadFlights();
+            }, []);
+
+            // AERIALDECK: saving is deliberately disabled in this copy.
+            //
+            // The live console at uf101.aerial.ie writes the WHOLE flights-data.json
+            // on every save, with no locking and no merge. If both that copy and this
+            // one could write, whichever saved second would silently wipe the other's
+            // flights. So this copy reads a snapshot and never writes; uf101.aerial.ie
+            // remains the only writer.
+            //
+            // At cutover, restore a real implementation here (posting to an AerialDeck
+            // endpoint) and disable saving on the VPS in the SAME change, so there is
+            // never a moment with two writers.
+            const READ_ONLY = true;
+            const saveFlightsToServer = async (flights) => {
+                showToast('Read-only preview — save in the live console at uf101.aerial.ie');
+                return false;
+            };
+            useEffect(() => { savedFlightsRef.current = savedFlights; }, [savedFlights]);
+            useEffect(() => { formDataRef.current = formData; }, [formData]);
+
+            const showToast = (message) => {
+                setToast(message);
+                setTimeout(() => setToast(null), 3000);
+            };
+
+            const updateForm = (field, value) => {
+                setFormData(prev => ({ ...prev, [field]: value }));
+            };
+
+            // Handle pilot checkbox toggle
+            const togglePilot = (pilotId) => {
+                setSelectedPilots(prev => {
+                    const newSelected = prev.includes(pilotId)
+                        ? prev.filter(id => id !== pilotId)
+                        : [...prev, pilotId];
+                    const names = newSelected
+                        .map(id => PILOTS.find(p => p.id === id)?.name)
+                        .filter(Boolean)
+                        .join(' & ');
+                    updateForm('pilotNames', names);
+                    return newSelected;
+                });
+            };
+
+            const handleZoneChange = (zoneId) => {
+                const zone = UAS_ZONES.find(z => z.id === zoneId);
+                if (zone && zone.id !== 'custom') {
+                    updateForm('zoneId', zone.id);
+                    updateForm('zoneName', zone.name);
+                } else {
+                    updateForm('zoneId', '');
+                    updateForm('zoneName', '');
+                }
+            };
+
+            // Format datetime for display (D/MM/YY HH:MM)
+            const formatDateTimeForDisplay = (isoString) => {
+                if (!isoString) return '';
+                const date = new Date(isoString);
+                const day = date.getDate();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const year = String(date.getFullYear()).slice(-2);
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                return day + '/' + month + '/' + year + ' ' + hours + ':' + minutes;
+            };
+
+            // Calculate duration between two datetimes
+            const calculateDuration = (start, end) => {
+                if (!start || !end) return '';
+                const startDate = new Date(start);
+                const endDate = new Date(end);
+                const diffMs = endDate - startDate;
+                if (diffMs < 0) return '';
+                const hours = Math.floor(diffMs / (1000 * 60 * 60));
+                const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                return hours + ':' + String(minutes).padStart(2, '0');
+            };
+
+            // Handle datetime changes
+            const handleDateTimeChange = (field, value) => {
+                updateForm(field, value);
+                const start = field === 'startDateTime' ? value : formData.startDateTime;
+                const end = field === 'endDateTime' ? value : formData.endDateTime;
+                if (start && end) {
+                    const formattedStart = formatDateTimeForDisplay(start);
+                    const formattedEnd = formatDateTimeForDisplay(end);
+                    updateForm('proposedDateTime', formattedStart + ' - ' + formattedEnd);
+                    updateForm('duration', calculateDuration(start, end));
+                }
+            };
+
+            // Initialize Map
+            useEffect(() => {
+                // Check if map container exists and map needs init (or reinit after unmount)
+                if (mapRef.current && (!mapInstanceRef.current || !mapRef.current.querySelector('.leaflet-container'))) {
+                    // Clean up old instance if it exists
+                    if (mapInstanceRef.current) {
+                        mapInstanceRef.current.remove();
+                        mapInstanceRef.current = null;
+                        drawnItemsRef.current = null;
+                    }
+                    const map = L.map(mapRef.current).setView([53.3498, -6.2603], 12);
+
+                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                        attribution: 'Tiles © Esri'
+                    }).addTo(map);
+
+                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+                        attribution: ''
+                    }).addTo(map);
+
+                    const drawnItems = new L.FeatureGroup();
+                    map.addLayer(drawnItems);
+                    drawnItemsRef.current = drawnItems;
+                    mapInstanceRef.current = map;
+                    updateDrawControl(shapeType);
+
+                    // Add zones toggle control
+                    const ZonesControl = L.Control.extend({
+                        options: { position: 'topleft' },
+                        onAdd: function() {
+                            const btn = L.DomUtil.create('button', 'zones-control');
+                            btn.innerHTML = '🗺️ Zones';
+                            btn.title = 'Toggle IAA Airspace Zones';
+                            btn.onclick = function(e) {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                const isActive = btn.classList.toggle('active');
+                                btn.innerHTML = isActive ? '🗺️ Zones ✓' : '🗺️ Zones';
+
+                                if (isActive) {
+                                    if (!zonesLayerRef.current && typeof IAA_ZONES_DATA !== 'undefined') {
+                                        zonesLayerRef.current = L.geoJSON(IAA_ZONES_DATA, {
+                                            interactive: false,
+                                            style: () => ({ color: '#ffeb3b', weight: 2, fillOpacity: 0 })
+                                        });
+                                    }
+                                    if (zonesLayerRef.current) {
+                                        zonesLayerRef.current.addTo(map);
+                                        zonesLayerRef.current.bringToBack();
+                                    }
+                                } else {
+                                    if (zonesLayerRef.current) map.removeLayer(zonesLayerRef.current);
+                                }
+                            };
+                            L.DomEvent.disableClickPropagation(btn);
+                            return btn;
+                        }
+                    });
+                    map.addControl(new ZonesControl());
+
+                    map.on(L.Draw.Event.CREATED, (e) => {
+                        // Require proposed dates before accepting any drawn shape. Zone detection
+                        // filters dormant event-based zones (e.g. T1) by the flight time window,
+                        // so without dates the detection would be misleading.
+                        const fd = formDataRef.current || {};
+                        if (!fd.startDateTime || !fd.endDateTime) {
+                            showToast('⚠️ Please set proposed start & end dates in the Zone & Time tab first, then draw.');
+                            return;
+                        }
+                        drawnItems.clearLayers();
+                        const layer = e.layer;
+                        drawnItems.addLayer(layer);
+                        setDrawnLayer(layer);
+
+                        if (e.layerType === 'circle') {
+                            const center = layer.getLatLng();
+                            const radius = layer.getRadius();
+                            setCircleData({ center, radius });
+                            setCoordinates([]);
+                            updateForm('circleCenter', formatCoordinate(center.lat, center.lng));
+                            updateForm('circleRadius', Math.round(radius) + 'm');
+                            updateForm('polygonCoords', '');
+                        } else if (e.layerType === 'polygon') {
+                            const latlngs = layer.getLatLngs()[0];
+                            setCoordinates(latlngs);
+                            setCircleData(null);
+                            const coordStr = latlngs.map((ll, i) =>
+                                'Point ' + (i + 1) + ': ' + formatCoordinate(ll.lat, ll.lng)
+                            ).join('\n');
+                            updateForm('polygonCoords', coordStr);
+                            updateForm('circleCenter', '');
+                            updateForm('circleRadius', '');
+                        }
+
+                        // Detect intersecting zones and calculate terrain
+                        detectIntersectingZones(layer, e.layerType);
+                        calculateAMSL(layer, e.layerType);
+                    });
+
+                    // Handle shape edits (move, resize, reshape)
+                    map.on(L.Draw.Event.EDITED, (e) => {
+                        e.layers.eachLayer((layer) => {
+                            const isCircle = layer instanceof L.Circle;
+                            const layerType = isCircle ? 'circle' : 'polygon';
+
+                            if (isCircle) {
+                                const center = layer.getLatLng();
+                                const radius = layer.getRadius();
+                                setCircleData({ center, radius });
+                                updateForm('circleCenter', formatCoordinate(center.lat, center.lng));
+                                updateForm('circleRadius', Math.round(radius) + 'm');
+                            } else {
+                                const latlngs = layer.getLatLngs()[0];
+                                setCoordinates(latlngs);
+                                const coordStr = latlngs.map((ll, i) =>
+                                    'Point ' + (i + 1) + ': ' + formatCoordinate(ll.lat, ll.lng)
+                                ).join('\n');
+                                updateForm('polygonCoords', coordStr);
+                            }
+
+                            // Recalculate zones and AMSL
+                            detectIntersectingZones(layer, layerType);
+                            calculateAMSL(layer, layerType);
+                        });
+                    });
+
+                    // Draw shape if loading a flight
+                    if (currentFlightId) {
+                        const fl = savedFlightsRef.current.find(f => f.id === currentFlightId);
+                        if (fl && fl.circle) {
+                            const circ = L.circle([fl.circle.lat, fl.circle.lng], {radius: fl.circle.r, color: '#0c3210', fillColor: '#98d59f', fillOpacity: 0.3});
+                            drawnItems.addLayer(circ);
+                            setDrawnLayer(circ);
+                            setCircleData({center: L.latLng(fl.circle.lat, fl.circle.lng), radius: fl.circle.r});
+                            map.fitBounds(circ.getBounds(), {padding: [50, 50]});
+                        } else if (fl && fl.coords && fl.coords.length > 0) {
+                            const ll = fl.coords.map(x => L.latLng(x.lat, x.lng));
+                            const poly = L.polygon(ll, {color: '#0c3210', fillColor: '#98d59f', fillOpacity: 0.3});
+                            drawnItems.addLayer(poly);
+                            setDrawnLayer(poly);
+                            setCoordinates(ll);
+                            map.fitBounds(poly.getBounds(), {padding: [50, 50]});
+                        }
+                    }
+                }
+                // Cleanup when switching away from flight view
+                return () => {
+                    if (mapInstanceRef.current && !mapRef.current) {
+                        mapInstanceRef.current.remove();
+                        mapInstanceRef.current = null;
+                        drawnItemsRef.current = null;
+                    }
+                };
+            }, [currentFlightId]);
+
+            // Get terrain elevation using AWS Terrain Tiles
+            const getTerrainElevation = async (lat, lng) => {
+                const zoom = 12; // Good balance of accuracy and speed
+                const n = Math.pow(2, zoom);
+                const tileX = Math.floor((lng + 180) / 360 * n);
+                const tileY = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n);
+
+                // Position within tile (0-256)
+                const pixelX = Math.floor(((lng + 180) / 360 * n - tileX) * 256);
+                const pixelY = Math.floor(((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n - tileY) * 256);
+
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous';
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 256;
+                        canvas.height = 256;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        const pixel = ctx.getImageData(pixelX, pixelY, 1, 1).data;
+                        // AWS Terrarium format: elevation = (R * 256 + G + B / 256) - 32768
+                        const elevation = (pixel[0] * 256 + pixel[1] + pixel[2] / 256) - 32768;
+                        resolve(elevation);
+                    };
+                    img.onerror = () => resolve(null);
+                    img.src = `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${zoom}/${tileX}/${tileY}.png`;
+                });
+            };
+
+            // Calculate terrain elevation at center point and set AMSL
+            const calculateAMSL = async (layer, layerType) => {
+                try {
+                    let centerPoint;
+
+                    if (layerType === 'circle') {
+                        const center = layer.getLatLng();
+                        centerPoint = { lat: center.lat, lng: center.lng };
+                    } else {
+                        // Polygon - use centroid
+                        const latlngs = layer.getLatLngs()[0];
+                        centerPoint = latlngs.reduce((acc, ll) => ({ lat: acc.lat + ll.lat / latlngs.length, lng: acc.lng + ll.lng / latlngs.length }), { lat: 0, lng: 0 });
+                    }
+
+                    // Get elevation at center point only
+                    const centerElevation = await getTerrainElevation(centerPoint.lat, centerPoint.lng);
+
+                    if (centerElevation !== null) {
+                        const centerElevationFt = Math.round(centerElevation * 3.28084); // Convert meters to feet
+
+                        // Store terrain elevation for recalculation when AGL changes
+                        updateForm('terrainElevation', centerElevationFt);
+
+                        // Get AGL value (default 400ft if not set)
+                        const aglStr = formData.maxHeight || '400ft';
+                        const aglFt = parseInt(aglStr) || 400;
+
+                        // Calculate AMSL from center terrain elevation
+                        const amslFt = centerElevationFt + aglFt;
+                        updateForm('maxAltitude', amslFt + 'ft');
+
+                        showToast(`Terrain (center): ${centerElevationFt}ft + AGL: ${aglFt}ft = AMSL: ${amslFt}ft`);
+                    }
+                } catch (err) {
+                    console.error('Terrain elevation error:', err);
+                }
+            };
+
+            // Detect which IAA zones intersect with the drawn shape
+            // A zone is "active" for a flight if the flight's time window overlaps any of the
+            // zone's limitedApplicability windows. Zones without limitedApplicability (or with an
+            // empty list) are treated as always-active. Event-based zones like T1 (Aviva Stadium)
+            // only turn on during the published match/concert windows; filtering by time stops the
+            // tool over-reporting which authorities a pilot actually needs to contact.
+            const isZoneActiveForFlight = (feature, flightStartIso, flightEndIso) => {
+                const la = feature.properties && feature.properties.limitedApplicability;
+                if (!la || !Array.isArray(la) || la.length === 0) return true;
+                if (!flightStartIso || !flightEndIso) return true; // no dates yet, be permissive
+                const fs = new Date(flightStartIso).getTime();
+                const fe = new Date(flightEndIso).getTime();
+                if (isNaN(fs) || isNaN(fe)) return true;
+                for (const w of la) {
+                    const ws = new Date(w.startDateTime).getTime();
+                    const we = new Date(w.endDateTime).getTime();
+                    if (isNaN(ws) || isNaN(we)) continue;
+                    // Half-open overlap: windows are inclusive-start, inclusive-end per IAA format.
+                    if (fs <= we && fe >= ws) return true;
+                }
+                return false;
+            };
+
+            const detectIntersectingZones = (layer, layerType) => {
+                if (typeof IAA_ZONES_DATA === 'undefined' || typeof turf === 'undefined') return;
+
+                // Read dates from the ref so we get the latest values, not a stale closure.
+                // If dates aren't set we skip detection entirely and prompt the user — this
+                // guarantees every saved flight has its zone list filtered against a real
+                // proposed time window, matching the IAA viewer's behaviour.
+                const flightStart = (formDataRef.current && formDataRef.current.startDateTime) || '';
+                const flightEnd = (formDataRef.current && formDataRef.current.endDateTime) || '';
+                if (!flightStart || !flightEnd) {
+                    showToast('⚠️ Enter proposed start & end dates in the Zone & Time tab before drawing.');
+                    return;
+                }
+
+                try {
+                    let drawnGeometry;
+                    if (layerType === 'circle') {
+                        // Convert circle to polygon for intersection check
+                        const center = layer.getLatLng();
+                        const radius = layer.getRadius();
+                        drawnGeometry = turf.circle([center.lng, center.lat], radius / 1000, { units: 'kilometers', steps: 64 });
+                    } else {
+                        // Polygon
+                        const latlngs = layer.getLatLngs()[0];
+                        const coords = latlngs.map(ll => [ll.lng, ll.lat]);
+                        coords.push(coords[0]); // Close the polygon
+                        drawnGeometry = turf.polygon([coords]);
+                    }
+
+                    const intersectingZones = [];
+                    let skippedDormant = 0;
+                    IAA_ZONES_DATA.features.forEach(feature => {
+                        try {
+                            if (turf.booleanIntersects(drawnGeometry, feature)) {
+                                if (isZoneActiveForFlight(feature, flightStart, flightEnd)) {
+                                    intersectingZones.push({
+                                        id: feature.properties.identifier,
+                                        name: feature.properties.name,
+                                        type: feature.properties.type
+                                    });
+                                } else {
+                                    skippedDormant++;
+                                }
+                            }
+                        } catch (e) {
+                            // Skip invalid geometries
+                        }
+                    });
+
+                    // Update form with detected zones
+                    if (intersectingZones.length > 0) {
+                        const zoneIds = intersectingZones.map(z => z.id).join(', ');
+                        const zoneNames = intersectingZones.map(z => z.name).join(', ');
+                        updateForm('zoneId', zoneIds);
+                        updateForm('zoneName', zoneNames);
+                        updateForm('detectedZones', JSON.stringify(intersectingZones));
+                        const tail = skippedDormant > 0 ? ` (${skippedDormant} dormant zone${skippedDormant > 1 ? 's' : ''} skipped)` : '';
+                        showToast(`Detected ${intersectingZones.length} zone(s): ${zoneIds}${tail}`);
+                    } else {
+                        updateForm('zoneId', '');
+                        updateForm('zoneName', '');
+                        updateForm('detectedZones', '');
+                        const msg = skippedDormant > 0
+                            ? `No active zones for this flight window (${skippedDormant} dormant zone${skippedDormant > 1 ? 's' : ''} overlap spatially but aren't active).`
+                            : 'No restricted zones detected';
+                        showToast(msg);
+                    }
+                } catch (err) {
+                    console.error('Zone detection error:', err);
+                }
+            };
+
+            const updateDrawControl = (type) => {
+                if (!mapInstanceRef.current) return;
+                if (drawControlRef.current) {
+                    mapInstanceRef.current.removeControl(drawControlRef.current);
+                }
+                const drawOptions = {
+                    position: 'topright',
+                    draw: {
+                        polyline: false,
+                        rectangle: false,
+                        marker: false,
+                        circlemarker: false,
+                        polygon: type === 'polygon' ? {
+                            allowIntersection: false,
+                            shapeOptions: { color: '#0c3210', fillColor: '#98d59f', fillOpacity: 0.3 }
+                        } : false,
+                        circle: type === 'circle' ? {
+                            shapeOptions: { color: '#0c3210', fillColor: '#98d59f', fillOpacity: 0.3 }
+                        } : false
+                    },
+                    edit: { featureGroup: drawnItemsRef.current, remove: true }
+                };
+                const drawControl = new L.Control.Draw(drawOptions);
+                mapInstanceRef.current.addControl(drawControl);
+                drawControlRef.current = drawControl;
+            };
+
+            useEffect(() => {
+                if (mapInstanceRef.current) {
+                    updateDrawControl(shapeType);
+                }
+            }, [shapeType]);
+
+            // When the flight time window changes, re-run zone detection so dormant event-based
+            // zones are added/removed as appropriate. We only re-detect if a layer is already
+            // drawn *and* we're editing a fresh flight (currentFlightId is null) — loaded flights
+            // keep their frozen detection to preserve the historical-zone invariant.
+            useEffect(() => {
+                if (currentFlightId) return;
+                if (!formData.startDateTime || !formData.endDateTime) return;
+                if (!drawnLayer) return;
+                const isCircle = drawnLayer instanceof L.Circle;
+                detectIntersectingZones(drawnLayer, isCircle ? 'circle' : 'polygon');
+            }, [formData.startDateTime, formData.endDateTime]);
+
+            // Recalculate AMSL when AGL (maxHeight) changes
+            useEffect(() => {
+                if (formData.terrainElevation) {
+                    const terrainFt = parseInt(formData.terrainElevation) || 0;
+                    const aglFt = parseInt(formData.maxHeight) || 400;
+                    const amslFt = terrainFt + aglFt;
+                    if (formData.maxAltitude !== amslFt + 'ft') {
+                        updateForm('maxAltitude', amslFt + 'ft');
+                    }
+                }
+            }, [formData.maxHeight]);
+
+            const clearDrawing = () => {
+                if (drawnItemsRef.current) {
+                    drawnItemsRef.current.clearLayers();
+                }
+                setDrawnLayer(null);
+                setCoordinates([]);
+                setCircleData(null);
+                updateForm('circleCenter', '');
+                updateForm('circleRadius', '');
+                updateForm('polygonCoords', '');
+            };
+
+            // KML Import
+            const handleKMLImport = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // Same date requirement as drawing — zone detection is time-sensitive.
+                const fd = formDataRef.current || {};
+                if (!fd.startDateTime || !fd.endDateTime) {
+                    showToast('⚠️ Please set proposed start & end dates in the Zone & Time tab first, then import.');
+                    e.target.value = '';
+                    return;
+                }
+
+                try {
+                    showToast('Importing KML...');
+                    const text = await file.text();
+                    const parser = new DOMParser();
+                    const xml = parser.parseFromString(text, 'text/xml');
+
+                    // Extract name/description
+                    const nameEl = xml.querySelector('Placemark > name') || xml.querySelector('Document > name');
+                    const descEl = xml.querySelector('Placemark > description') || xml.querySelector('Document > description');
+                    const kmlName = nameEl ? nameEl.textContent.trim() : '';
+                    const kmlDesc = descEl ? descEl.textContent.trim() : '';
+
+                    // Extract polygon coordinates (including holes/inner boundaries).
+                    // We accept three shapes, in priority order:
+                    //   1. <Polygon> with <outerBoundaryIs><LinearRing><coordinates>
+                    //   2. A bare <LinearRing><coordinates>
+                    //   3. A <LineString><coordinates> that is already closed (first point == last point).
+                    //      Some tools (including Google Earth's "Add Path" tool) export closed loops
+                    //      as LineString rather than Polygon; we treat those as polygon outer boundaries.
+                    //      Open LineStrings are rejected with a clearer message below.
+                    const polygonEl = xml.querySelector('Polygon');
+                    const lineStringCoordsEl = xml.querySelector('LineString coordinates');
+                    let outerCoordsEl = xml.querySelector('outerBoundaryIs coordinates')
+                        || xml.querySelector('Polygon coordinates')
+                        || xml.querySelector('LinearRing coordinates');
+                    let importedFromLineString = false;
+                    let openLineString = false;
+
+                    if (!outerCoordsEl && lineStringCoordsEl) {
+                        // Parse the LineString's raw coordinates to test closure.
+                        const rawPoints = lineStringCoordsEl.textContent
+                            .trim()
+                            .split(/\s+/)
+                            .filter(p => p.includes(','));
+                        if (rawPoints.length >= 4) {
+                            const [lng1, lat1] = rawPoints[0].split(',').map(Number);
+                            const [lng2, lat2] = rawPoints[rawPoints.length - 1].split(',').map(Number);
+                            // ~1e-6 degrees ≈ 0.11m at the equator — tight enough to catch only
+                            // genuinely closed loops but tolerant of floating-point round-trip drift.
+                            const TOL = 1e-6;
+                            const isClosed = Math.abs(lng1 - lng2) < TOL && Math.abs(lat1 - lat2) < TOL;
+                            if (isClosed) {
+                                outerCoordsEl = lineStringCoordsEl;
+                                importedFromLineString = true;
+                            } else {
+                                openLineString = true;
+                            }
+                        } else {
+                            openLineString = true;
+                        }
+                    }
+
+                    if (outerCoordsEl) {
+                        // Parse outer boundary
+                        const parseCoords = (coordText) => {
+                            const points = coordText.trim().split(/\s+/).filter(p => p.includes(','));
+                            return points.map(p => {
+                                const [lng, lat] = p.split(',').map(Number);
+                                return L.latLng(lat, lng);
+                            });
+                        };
+
+                        const outerLatlngs = parseCoords(outerCoordsEl.textContent);
+
+                        // Check for inner boundaries (holes)
+                        const innerBoundaries = polygonEl ? polygonEl.querySelectorAll('innerBoundaryIs coordinates') : [];
+                        const holes = [];
+                        innerBoundaries.forEach(innerEl => {
+                            const holeLatlngs = parseCoords(innerEl.textContent);
+                            if (holeLatlngs.length > 0) {
+                                holes.push(holeLatlngs);
+                            }
+                        });
+
+                        // For Leaflet polygon with holes: [outerRing, hole1, hole2, ...]
+                        const latlngs = holes.length > 0 ? [outerLatlngs, ...holes] : outerLatlngs;
+
+                        if (outerLatlngs.length > 0) {
+                            // Clear existing and draw polygon
+                            clearDrawing();
+                            setShapeType('polygon');
+
+                            const poly = L.polygon(latlngs, {color: '#0c3210', fillColor: '#98d59f', fillOpacity: 0.3});
+                            if (drawnItemsRef.current) {
+                                drawnItemsRef.current.addLayer(poly);
+                            }
+                            setDrawnLayer(poly);
+                            // Store outer boundary as main coordinates
+                            setCoordinates(outerLatlngs);
+
+                            // Update form fields - show outer boundary points
+                            let coordStr = outerLatlngs.map((ll, i) =>
+                                'Point ' + (i + 1) + ': ' + formatCoordinate(ll.lat, ll.lng)
+                            ).join('\n');
+                            if (holes.length > 0) {
+                                coordStr += '\n\n--- HOLE (excluded area) ---\n';
+                                holes.forEach((hole, holeIdx) => {
+                                    if (holes.length > 1) coordStr += 'Hole ' + (holeIdx + 1) + ':\n';
+                                    coordStr += hole.map((ll, i) =>
+                                        'Point ' + (i + 1) + ': ' + formatCoordinate(ll.lat, ll.lng)
+                                    ).join('\n');
+                                });
+                            }
+                            updateForm('polygonCoords', coordStr);
+
+                            // Update area description if available
+                            if (kmlName && !formData.areaDescription) {
+                                updateForm('areaDescription', kmlName);
+                            }
+
+                            // Fit map to bounds
+                            if (mapInstanceRef.current) {
+                                mapInstanceRef.current.fitBounds(poly.getBounds(), {padding: [50, 50]});
+                            }
+
+                            // Detect intersecting zones
+                            detectIntersectingZones(poly, 'polygon');
+
+                            // Calculate AMSL from terrain elevation
+                            calculateAMSL(poly, 'polygon');
+
+                            const holeInfo = holes.length > 0 ? ' (with ' + holes.length + ' hole' + (holes.length > 1 ? 's' : '') + ')' : '';
+                            const sourceInfo = importedFromLineString ? ' (converted from closed path)' : '';
+                            showToast('KML imported: ' + (kmlName || 'Polygon with ' + outerLatlngs.length + ' points') + holeInfo + sourceInfo);
+                        }
+                    } else if (openLineString) {
+                        // We found a LineString but its first/last points don't match, so it's an
+                        // open path rather than a closed flight boundary. Tell the user what to do.
+                        showToast('KML contains an open path, not a closed area. Close the loop in Google Earth (first point = last point) and re-export, or use a Polygon.');
+                    } else {
+                        // Check for Point (circle center)
+                        const pointEl = xml.querySelector('Point coordinates');
+                        if (pointEl) {
+                            const [lng, lat] = pointEl.textContent.trim().split(',').map(Number);
+                            showToast('KML contains a point. Draw a circle around it on the map.');
+                            if (mapInstanceRef.current) {
+                                mapInstanceRef.current.setView([lat, lng], 15);
+                            }
+                        } else {
+                            showToast('No polygon, closed path, or point found in KML');
+                        }
+                    }
+                } catch (err) {
+                    console.error('KML import error:', err);
+                    showToast('Error importing KML');
+                }
+
+                // Reset file input
+                e.target.value = '';
+            };
+
+            // Flight management
+            const saveFlight = () => {
+                if (currentFlightId) {
+                    // Updating existing flight - keep the same name and original geojsonVersion
+                    const existing = savedFlights.find(f => f.id === currentFlightId);
+                    const nm = existing ? existing.name : 'Unnamed';
+                    // Preserve original geojsonVersion, or capture current if not set
+                    const geoVersion = existing?.geojsonVersion || getGeojsonVersion();
+                    const fl = {id: currentFlightId, name: nm, zoneName: formData.zoneName, savedAt: new Date().toISOString(), geojsonVersion: geoVersion, formData: {...formData}, selectedPilots: [...selectedPilots], shapeType, coords: coordinates.map(x => ({lat: x.lat, lng: x.lng})), circle: circleData ? {lat: circleData.center.lat, lng: circleData.center.lng, r: circleData.radius} : null};
+                    const upd = savedFlights.map(f => f.id === currentFlightId ? fl : f);
+                    setSavedFlights(upd);
+                    saveFlightsToServer(upd);
+                    showToast('Updated: ' + nm);
+                } else {
+                    // New flight - show name prompt
+                    setSaveName(formData.areaDescription || '');
+                    setShowSaveModal(true);
+                }
+            };
+            const confirmSave = () => {
+                const nm = saveName.trim() || 'Unnamed Flight';
+                const defaultData = {operatorName: COMPANY.operatorName, registrationNumber: COMPANY.registrationNumber, authNumber: COMPANY.authNumber, sailLevel: 'SORA - SAIL II', vlosBvlos: 'VLOS', uasModel: 'DJI Mavic 3 Pro', pilotNames: "Tony Kinlan & Rob O'Connor", phonePrimary: '0861649569', phoneAlternate: '0877582972', zoneId: '', zoneName: '', detectedZones: '', areaDescription: '', maxAltitude: '', maxHeight: '400ft', startDateTime: '', endDateTime: '', proposedDateTime: '', duration: '', circleCenter: '', circleRadius: '', polygonCoords: ''};
+                const fl = {id: Date.now().toString(), name: nm, zoneName: '', savedAt: new Date().toISOString(), geojsonVersion: getGeojsonVersion(), formData: defaultData, selectedPilots: ['tk', 'roc'], shapeType: 'polygon', coords: [], circle: null};
+                const upd = [fl, ...savedFlights];
+                setSavedFlights(upd); saveFlightsToServer(upd);
+                setFormData(defaultData); setSelectedPilots(['tk', 'roc']); setShapeType('polygon'); clearDrawing();
+                setCurrentFlightId(fl.id);
+                setShowSaveModal(false); setSaveName(''); showToast('Created: ' + nm);
+            };
+            const loadFlight = (id) => {
+                const fl = savedFlightsRef.current.find(f => f.id === id);
+                if (!fl) { showToast('Flight not found'); return; }
+                setFormData(fl.formData); setSelectedPilots(fl.selectedPilots || ['tk', 'roc']); setShapeType(fl.shapeType || 'polygon'); setCurrentFlightId(fl.id);
+                // Delay drawing to ensure map is ready after potential remount
+                setTimeout(() => {
+                    if (drawnItemsRef.current) drawnItemsRef.current.clearLayers();
+                    if (mapInstanceRef.current) mapInstanceRef.current.invalidateSize();
+                    if (fl.circle && mapInstanceRef.current && drawnItemsRef.current) {
+                        const circ = L.circle([fl.circle.lat, fl.circle.lng], {radius: fl.circle.r, color: '#0c3210', fillColor: '#98d59f', fillOpacity: 0.3});
+                        drawnItemsRef.current.addLayer(circ); setDrawnLayer(circ);
+                        setCircleData({center: L.latLng(fl.circle.lat, fl.circle.lng), radius: fl.circle.r}); setCoordinates([]);
+                        mapInstanceRef.current.fitBounds(circ.getBounds(), {padding: [50, 50]});
+                        // Don't recalculate zones - use stored zone data from when flight was saved
+                        calculateAMSL(circ, 'circle');
+                    }
+                    else if (fl.coords && fl.coords.length > 0 && mapInstanceRef.current && drawnItemsRef.current) {
+                        const ll = fl.coords.map(x => L.latLng(x.lat, x.lng));
+                        const poly = L.polygon(ll, {color: '#0c3210', fillColor: '#98d59f', fillOpacity: 0.3});
+                        drawnItemsRef.current.addLayer(poly); setDrawnLayer(poly); setCoordinates(ll); setCircleData(null);
+                        mapInstanceRef.current.fitBounds(poly.getBounds(), {padding: [50, 50]});
+                        // Don't recalculate zones - use stored zone data from when flight was saved
+                        calculateAMSL(poly, 'polygon');
+                    }
+                }, 100);
+                showToast('Loaded: ' + fl.name);
+            };
+            const deleteFlight = (id) => { const upd = savedFlights.filter(f => f.id !== id); setSavedFlights(upd); saveFlightsToServer(upd); if (currentFlightId === id) { if (drawnItemsRef.current) drawnItemsRef.current.clearLayers(); setDrawnLayer(null); setCoordinates([]); setCircleData(null); setCurrentFlightId(null); } showToast('Deleted'); };
+            const duplicateFlight = (id) => { const original = savedFlights.find(f => f.id === id); if (!original) return; const newId = Date.now().toString(); const copy = {...original, id: newId, name: original.name + ' (copy)', savedAt: new Date().toISOString(), formData: {...original.formData}, selectedPilots: [...(original.selectedPilots || [])], coords: original.coords ? original.coords.map(c => ({...c})) : null, circle: original.circle ? {...original.circle} : null}; const upd = [copy, ...savedFlights]; setSavedFlights(upd); saveFlightsToServer(upd); showToast('Duplicated: ' + copy.name); };
+            const startRename = (id) => { const fl = savedFlights.find(f => f.id === id); if (fl) { setRenameFlightId(id); setRenameName(fl.name); setShowRenameModal(true); } };
+            const confirmRename = () => { if (!renameFlightId) return; const newName = renameName.trim() || 'Unnamed Flight'; const upd = savedFlights.map(f => f.id === renameFlightId ? {...f, name: newName} : f); setSavedFlights(upd); saveFlightsToServer(upd); setShowRenameModal(false); setRenameFlightId(null); setRenameName(''); showToast('Renamed to: ' + newName); };
+            const newFlight = () => { setCurrentFlightId(null); setFormData({operatorName: COMPANY.operatorName, registrationNumber: COMPANY.registrationNumber, authNumber: COMPANY.authNumber, sailLevel: 'SORA - SAIL II', vlosBvlos: 'VLOS', uasModel: 'DJI Mavic 3 Pro', pilotNames: "Tony Kinlan & Rob O'Connor", phonePrimary: '0861649569', phoneAlternate: '0877582972', zoneId: '', zoneName: '', detectedZones: '', areaDescription: '', maxAltitude: '', maxHeight: '400ft', startDateTime: '', endDateTime: '', proposedDateTime: '', duration: '', circleCenter: '', circleRadius: '', polygonCoords: ''}); setSelectedPilots(['tk', 'roc']); clearDrawing(); showToast('New flight'); };
+
+            // Capture map screenshot
+            const captureMapScreenshot = async () => {
+                if (!mapRef.current) return null;
+                showToast('Capturing map...');
+                try {
+                    const ctrls = mapRef.current.querySelectorAll('.leaflet-control');
+                    ctrls.forEach(el => el.style.visibility = 'hidden');
+                    await new Promise(r => setTimeout(r, 200));
+                    // Use domtoimage instead of html2canvas
+                    const dataUrl = await domtoimage.toPng(mapRef.current, {quality: 1, width: mapRef.current.offsetWidth * 2, height: mapRef.current.offsetHeight * 2, style: {transform: 'scale(2)', transformOrigin: 'top left'}});
+                    const img = new Image();
+                    await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = dataUrl; });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    canvas.getContext('2d').drawImage(img, 0, 0);
+                    ctrls.forEach(el => el.style.visibility = '');
+                    return canvas;
+                } catch (err) { console.error(err); showToast('Screenshot error'); return null; }
+            };
+
+
+            const downloadScreenshot = async () => {
+                const canvas = await captureMapScreenshot();
+                if (canvas) {
+                    canvas.toBlob((blob) => {
+                        saveAs(blob, 'UF101_Map_' + (formData.areaDescription || 'location') + '.png');
+                        showToast('Map screenshot downloaded!');
+                    });
+                }
+            };
+
+            // Export all flights to JSON file
+            const exportFlightsToFile = () => {
+                const dataStr = JSON.stringify(savedFlights, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'flights-data.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast('Flights exported! Replace flights-data.json on NAS to sync.');
+            };
+
+            // Escape text for safe inclusion in XML/KML element content.
+            // Without this, characters like & in area descriptions (e.g. "Docklands & Quays")
+            // produce KML that strict parsers (Google Earth, QGIS) reject as not well-formed.
+            const xmlEscape = (str) => String(str == null ? '' : str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+
+            const generateKML = () => {
+                const areaDesc = formData.areaDescription || 'Unnamed';
+                let kmlContent = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n';
+                kmlContent += '<name>UAS Flight Area - ' + xmlEscape(areaDesc) + '</name>\n';
+                kmlContent += '<description>U.F.101 Application - ' + xmlEscape(formData.operatorName) + '</description>\n';
+                kmlContent += '<Style id="flightArea"><LineStyle><color>ffb36600</color><width>3</width></LineStyle><PolyStyle><color>4db36600</color></PolyStyle></Style>\n';
+
+                if (circleData) {
+                    const center = circleData.center;
+                    const radius = circleData.radius;
+                    const points = 36;
+                    let coords = '';
+                    for (let i = 0; i <= points; i++) {
+                        const angle = (i / points) * 2 * Math.PI;
+                        const lat = center.lat + (radius / 111320) * Math.cos(angle);
+                        const lng = center.lng + (radius / (111320 * Math.cos(center.lat * Math.PI / 180))) * Math.sin(angle);
+                        coords += lng + ',' + lat + ',0\n';
+                    }
+                    kmlContent += '<Placemark><name>Flight Area (Circle)</name><styleUrl>#flightArea</styleUrl>\n';
+                    kmlContent += '<Polygon><outerBoundaryIs><LinearRing><coordinates>\n' + coords + '</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>\n';
+                } else if (coordinates.length > 0) {
+                    let coords = coordinates.map(ll => ll.lng + ',' + ll.lat + ',0').join('\n');
+                    coords += '\n' + coordinates[0].lng + ',' + coordinates[0].lat + ',0';
+                    kmlContent += '<Placemark><name>Flight Area (Polygon)</name><styleUrl>#flightArea</styleUrl>\n';
+                    kmlContent += '<Polygon><outerBoundaryIs><LinearRing><coordinates>\n' + coords + '\n</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>\n';
+                }
+
+                kmlContent += '</Document>\n</kml>';
+                const blob = new Blob([kmlContent], { type: 'application/vnd.google-earth.kml+xml' });
+                // Strip characters that aren't safe in filenames (not the same as XML-unsafe chars).
+                const safeFilenamePart = areaDesc.replace(/[\\/:*?"<>|&]/g, '_').trim() || 'location';
+                saveAs(blob, 'UF101_FlightArea_' + safeFilenamePart + '.kml');
+                showToast('KML file downloaded!');
+            };
+
+            // Generate PDF matching exact IAA template
+            const generatePDF = async () => {
+                showToast('Generating PDF...');
+
+                try {
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF('p', 'mm', 'a4');
+                    const pageWidth = 210;
+                    const pageHeight = 297;
+                    const margin = 15;
+                    const contentWidth = pageWidth - (margin * 2);
+                    const issueDate = '04/11/2025';
+
+                    // Helper function to draw the header table on each page
+                    const drawHeader = (pageNum) => {
+                        const headerHeight = 28;
+                        const logoWidth = 35;
+                        const col2Width = 45;
+                        const col3Width = contentWidth - logoWidth - col2Width;
+
+                        // Outer border
+                        doc.setDrawColor(0);
+                        doc.setLineWidth(0.5);
+                        doc.rect(margin, margin, contentWidth, headerHeight);
+
+                        // Logo cell vertical line
+                        doc.line(margin + logoWidth, margin, margin + logoWidth, margin + headerHeight);
+
+                        // Add IAA logo
+                        try {
+                            doc.addImage(IAA_LOGO_BASE64, 'JPEG', margin + 4, margin + 2, 28, 24);
+                        } catch(e) {
+                            console.warn('Could not add logo:', e);
+                        }
+
+                        // Column 2 - Form details (4 rows)
+                        const rowHeight = headerHeight / 4;
+                        doc.line(margin + logoWidth + col2Width, margin, margin + logoWidth + col2Width, margin + headerHeight);
+
+                        // Row lines in col2
+                        doc.setLineWidth(0.3);
+                        for (let i = 1; i < 4; i++) {
+                            doc.line(margin + logoWidth, margin + (rowHeight * i), margin + logoWidth + col2Width, margin + (rowHeight * i));
+                        }
+
+                        // Text in column 2
+                        doc.setFontSize(9);
+                        doc.setFont('helvetica', 'normal');
+                        doc.text('Form No. U.F.101', margin + logoWidth + 2, margin + 5);
+                        doc.text('Version No. 13', margin + logoWidth + 2, margin + rowHeight + 5);
+                        doc.text('Issue Date ' + issueDate, margin + logoWidth + 2, margin + (rowHeight * 2) + 5);
+                        doc.text('Page ' + pageNum + ' of 3', margin + logoWidth + 2, margin + (rowHeight * 3) + 5);
+
+                        // Column 3 - Title (right-aligned in cell, centered vertically)
+                        doc.setFontSize(10);
+                        doc.setFont('helvetica', 'bold');
+                        const titleX = margin + logoWidth + col2Width + (col3Width / 2);
+                        doc.text('Application for UAS Operation within a', titleX, margin + 8, { align: 'center' });
+                        doc.text('UAS Geographical Zone Restricted or', titleX, margin + 14, { align: 'center' });
+                        doc.text('Prohibited Area', titleX, margin + 20, { align: 'center' });
+
+                        return margin + headerHeight + 3;
+                    };
+
+                    // Helper to draw a form row with proper styling
+                    const drawFormRow = (y, label, value, rowHeight = 8, labelItalicPart = '', valueFontSize = 9) => {
+                        const labelWidth = contentWidth * 0.45;
+
+                        // Draw horizontal line at top of row
+                        doc.setDrawColor(150, 150, 150);
+                        doc.setLineWidth(0.2);
+                        doc.line(margin, y, margin + contentWidth, y);
+
+                        // Label text
+                        doc.setFontSize(9);
+                        doc.setFont('helvetica', 'bold');
+
+                        // Handle multi-line labels
+                        if (label.includes('\n')) {
+                            const lines = label.split('\n');
+                            let textY = y + 4;
+                            lines.forEach((line, idx) => {
+                                if (idx === 0) {
+                                    doc.setFont('helvetica', 'bold');
+                                } else {
+                                    doc.setFont('helvetica', 'italic');
+                                }
+                                doc.text(line, margin + 2, textY);
+                                textY += 3.5;
+                            });
+                        } else {
+                            doc.text(label, margin + 2, y + 5.5);
+                        }
+
+                        // Value text
+                        doc.setFontSize(valueFontSize);
+                        doc.setFont('helvetica', 'normal');
+                        const valueWidth = contentWidth - labelWidth - 4;
+                        const valueLines = doc.splitTextToSize(value || '', valueWidth);
+                        if (valueLines.length > 1) {
+                            // Multiple lines - render each
+                            valueLines.forEach((line, idx) => {
+                                doc.text(line, margin + labelWidth + 2, y + 4 + (idx * 3.5));
+                            });
+                            // Return extra height for wrapped text
+                            return y + Math.max(rowHeight, valueLines.length * 3.5 + 2);
+                        } else {
+                            doc.text(value || '', margin + labelWidth + 2, y + 5.5);
+                            return y + rowHeight;
+                        }
+                    };
+
+                    // ============ PAGE 1 ============
+                    let y = drawHeader(1);
+
+                    // Small "pre" text (matching template artifact)
+                    doc.setFontSize(8);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text('pre', pageWidth / 2, y + 2, { align: 'center' });
+                    y += 4;
+
+                    // Intro text
+                    doc.setFontSize(7.5);
+                    doc.setFont('helvetica', 'normal');
+                    const introText = 'This Form is for the use by UAS Operators when applying to the relevant UAS Geographical Zone Authority to conduct UAS Operations within UAS Geographical Zone Prohibited or Restricted Area*. Contact details available on https://www.iaa.ie/drones/uas-geographic-zones.';
+                    const introLines = doc.splitTextToSize(introText, contentWidth);
+                    doc.text(introLines, margin, y + 3);
+                    y += 10;
+
+                    // Blue header row
+                    doc.setFillColor(189, 215, 238);
+                    doc.rect(margin, y, contentWidth, 7, 'F');
+                    doc.setDrawColor(0);
+                    doc.setLineWidth(0.3);
+                    doc.rect(margin, y, contentWidth, 7);
+                    doc.setFontSize(9);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(192, 0, 0);
+                    doc.text('UAS Operations Application Form - UAS Geographical Zone Prohibited / Restricted Area', margin + 3, y + 5);
+                    doc.setTextColor(0);
+                    y += 7;
+
+                    // Form rows
+                    y = drawFormRow(y, 'UAS Operator Name', formData.operatorName);
+                    y = drawFormRow(y, 'UAS Operator Registration Number (16 digit)', formData.registrationNumber);
+                    y = drawFormRow(y, 'Operational Authorisation Number\n(if applicable, for Specific Category Operations) *', formData.authNumber, 10);
+                    y = drawFormRow(y, 'Specific Assurance and Integrity Level (SAIL) /\nPre-Defined Risk Assessment\n(if applicable) *', formData.sailLevel, 14);
+                    y = drawFormRow(y, 'VLOS / BVLOS', formData.vlosBvlos);
+                    y = drawFormRow(y, 'UAS Model(s)', formData.uasModel);
+                    y = drawFormRow(y, 'Remote Pilot(s) Name(s)', formData.pilotNames);
+                    y = drawFormRow(y, 'Mobile Phone Numbers, Primary', formData.phonePrimary);
+                    y = drawFormRow(y, 'Mobile Phone Numbers, Alternate', formData.phoneAlternate);
+                    y = drawFormRow(y, 'UAS Geographical Zone ID', formData.zoneId);
+                    y = drawFormRow(y, 'UAS Geographical Zone Name', formData.zoneName);
+                    y = drawFormRow(y, 'Description of the Area (townland, landmark, etc.)', formData.areaDescription);
+                    y = drawFormRow(y, 'Maximum Altitude (AMSL)', formData.maxAltitude);
+                    y = drawFormRow(y, 'Maximum Height Above Ground Level (AGL)', formData.maxHeight);
+                    y = drawFormRow(y, 'Proposed Date(s) & Time(s) (Local)', formData.proposedDateTime);
+                    y = drawFormRow(y, 'Duration (HH:MM)', formData.duration);
+                    // Derive the circle/polygon row values from the live drawing state rather than
+                    // trusting the form fields OR the shapeType toggle — both can drift out of sync.
+                    // Specifically, loading a saved flight that contains a circle can leave
+                    // shapeType='polygon' (whatever was last toggled in the UI) even though the
+                    // actual restored layer is a circle. circleData / coordinates reflect what's
+                    // really on the map, so we base the decision on those.
+                    const hasCircle = !!(circleData && circleData.center);
+                    const hasPolygon = !hasCircle && coordinates && coordinates.length > 0;
+                    const pdfCircleCenter = hasCircle
+                        ? (formData.circleCenter || formatCoordinate(circleData.center.lat, circleData.center.lng))
+                        : '';
+                    const pdfCircleRadius = hasCircle
+                        ? (formData.circleRadius || (Math.round(circleData.radius) + 'm'))
+                        : '';
+                    const pdfPolygonValue = hasPolygon ? 'Attached' : '';
+                    y = drawFormRow(y, 'Circle Centre Latitude & Longitude\n(Degrees, Minutes & Seconds WGS-84)', pdfCircleCenter, 10);
+                    y = drawFormRow(y, 'Circle Radius of Operation (m)', pdfCircleRadius);
+                    y = drawFormRow(y, 'OR Polygon Latitudes & Longitudes\n(Degrees, Minutes & Seconds WGS-84)', pdfPolygonValue, 10);
+
+                    // Final bottom line for table
+                    doc.setDrawColor(150, 150, 150);
+                    doc.line(margin, y, margin + contentWidth, y);
+
+                    // Footer note
+                    y += 6;
+                    doc.setFontSize(8);
+                    doc.setFont('helvetica', 'bolditalic');
+                    doc.setTextColor(192, 0, 0);
+                    const footerNote = '* N.B. Certain UAS Geographical Zones only allow access requests from specific category operators. For more information, including contact details of zone authorities, please refer to www.iaa.ie/drones.';
+                    const footerLines = doc.splitTextToSize(footerNote, contentWidth - 20);
+                    doc.text(footerLines, pageWidth / 2, y, { align: 'center' });
+                    doc.setTextColor(0);
+
+                    // ============ PAGE 2 ============
+                    doc.addPage();
+                    y = drawHeader(2);
+
+                    // Map section outer box
+                    const mapBoxHeight = pageHeight - y - margin;
+                    doc.setDrawColor(0);
+                    doc.setLineWidth(0.5);
+                    doc.rect(margin, y, contentWidth, mapBoxHeight);
+
+                    // Map section title
+                    doc.setFontSize(12);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Map of Location, Area of Operation, etc.', pageWidth / 2, y + 10, { align: 'center' });
+
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'italic');
+                    doc.setTextColor(255, 102, 0);
+                    doc.text('(Insert Below and attach a .kml/.kmz of the required volume when submitting)', pageWidth / 2, y + 18, { align: 'center' });
+                    doc.setTextColor(0);
+
+                    // Add map screenshot if available
+                    if (drawnLayer) {
+                        try {
+                            const canvas = await captureMapScreenshot();
+                            if (canvas) {
+                                const imgData = canvas.toDataURL('image/png');
+                                const imgWidth = contentWidth - 10;
+                                const imgHeight = (canvas.height / canvas.width) * imgWidth;
+                                const maxImgHeight = mapBoxHeight - 35;
+                                doc.addImage(imgData, 'PNG', margin + 5, y + 25, imgWidth, Math.min(imgHeight, maxImgHeight));
+                            }
+                        } catch (imgErr) {
+                            console.warn('Could not add map image:', imgErr);
+                        }
+                    }
+
+                    // ============ PAGE 3 ============
+                    doc.addPage();
+                    y = drawHeader(3);
+
+                    // Calculate available space
+                    const availableHeight = pageHeight - y - margin;
+                    const signatureBoxHeight = 30;
+                    const grayBoxHeight = availableHeight - signatureBoxHeight;
+
+                    // Gray box for additional requirements
+                    doc.setFillColor(217, 217, 217);
+                    doc.rect(margin, y, contentWidth, grayBoxHeight, 'F');
+                    doc.setDrawColor(0);
+                    doc.setLineWidth(0.5);
+                    doc.rect(margin, y, contentWidth, grayBoxHeight);
+
+                    doc.setFontSize(12);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(0);
+                    doc.text('Additional Zone Authority Requirements', pageWidth / 2, y + 12, { align: 'center' });
+
+                    y += grayBoxHeight;
+
+                    // Signature box
+                    doc.setFillColor(255, 255, 255);
+                    doc.rect(margin, y, contentWidth, signatureBoxHeight, 'FD');
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text('Zone Authority __________________________  Signature ______________________________  Date ______________', margin + 5, y + 18);
+
+                    // Save PDF
+                    const filename = 'UF101_' + (formData.areaDescription || 'Application') + '_' + new Date().toISOString().split('T')[0] + '.pdf';
+                    doc.save(filename);
+                    showToast('PDF downloaded: ' + filename);
+
+                } catch (error) {
+                    console.error('PDF generation error:', error);
+                    showToast('Error generating PDF: ' + error.message);
+                }
+            };
+
+            const exportAll = async () => {
+                showToast('Generating all exports...');
+                await downloadScreenshot();
+                generateKML();
+                await generatePDF();
+                showToast('All files exported!');
+            };
+
+            return (
+                <div className="app-wrapper">
+                    {/* Header - spans full width */}
+                    <header className="header">
+                        <img src="Aerial25-Green-Small.png" alt="Aerial Logo" style={{height: '62px'}} />
+                        <div className="header-text">
+                            <h1>U.F.101 Creator</h1>
+                            <p>Green Graph Adore Ltd • UAS Flight Application Generator</p>
+                        </div>
+                    </header>
+
+                    {/* Save Modal */}
+                    {showSaveModal && (
+                        <div className="modal-overlay" onClick={() => setShowSaveModal(false)}>
+                            <div className="modal" onClick={(e) => e.stopPropagation()}>
+                                <h3>New Flight Application</h3>
+                                <div className="form-group">
+                                    <label>Flight Name</label>
+                                    <input type="text" value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Enter a name for this flight..." autoFocus onKeyDown={(e) => e.key === 'Enter' && confirmSave()} />
+                                </div>
+                                <div className="modal-actions">
+                                    <button className="btn btn-secondary" onClick={() => setShowSaveModal(false)}>Cancel</button>
+                                    <button className="btn btn-success" onClick={confirmSave}>Create</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Rename Modal */}
+                    {showRenameModal && (
+                        <div className="modal-overlay" onClick={() => setShowRenameModal(false)}>
+                            <div className="modal" onClick={(e) => e.stopPropagation()}>
+                                <h3>Rename Flight</h3>
+                                <div className="form-group">
+                                    <label>Flight Name</label>
+                                    <input type="text" value={renameName} onChange={(e) => setRenameName(e.target.value)} placeholder="Enter new name..." autoFocus onKeyDown={(e) => e.key === 'Enter' && confirmRename()} />
+                                </div>
+                                <div className="modal-actions">
+                                    <button className="btn btn-secondary" onClick={() => setShowRenameModal(false)}>Cancel</button>
+                                    <button className="btn btn-success" onClick={confirmRename}>Rename</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Main Layout - 3 columns */}
+                    <div className="main-layout">
+                        {/* Sidebar */}
+                        <div className="sidebar">
+                            <div className="sidebar-header">
+                                <span>📁 Flights</span>
+                                <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
+                                    <input
+                                        type="text"
+                                        placeholder="Search..."
+                                        value={flightSearch}
+                                        onChange={(e) => setFlightSearch(e.target.value)}
+                                        className="sidebar-search"
+                                    />
+                                    <button className="btn btn-sm" onClick={() => { setSaveName(''); setShowSaveModal(true); }} style={{background: '#98d59f', color: '#0c3210'}}>+ New</button>
+                                </div>
+                            </div>
+                            <div className="sidebar-flights">
+                                {savedFlights.length === 0 ? (
+                                    <div className="sidebar-empty">
+                                        <div style={{fontSize: '32px', marginBottom: '12px'}}>📋</div>
+                                        <div>No saved flights</div>
+                                        <div style={{marginTop: '8px', fontSize: '12px'}}>Click + New to create one</div>
+                                    </div>
+                                ) : (
+                                    savedFlights.filter(flight =>
+                                        flight.name.toLowerCase().includes(flightSearch.toLowerCase()) ||
+                                        (flight.zoneName && flight.zoneName.toLowerCase().includes(flightSearch.toLowerCase()))
+                                    ).map(flight => (
+                                        <div key={flight.id} className={"sidebar-flight" + (currentFlightId === flight.id ? " active" : "")} onClick={() => loadFlight(flight.id)}>
+                                            <div className="sidebar-flight-name">{flight.name}</div>
+                                            <div className="sidebar-flight-meta">{flight.zoneName || 'No zone'} • {new Date(flight.savedAt).toLocaleDateString()}</div>
+                                            {flight.geojsonVersion && (
+                                                <div className="sidebar-flight-geojson" style={{fontSize: '10px', color: '#98d59f', marginTop: '4px'}}>
+                                                    📄 {flight.geojsonVersion.name?.replace('UAS Geographical Zones Ireland ', 'IAA ') || 'Unknown version'}
+                                                    <a href={'/uf101/geojson-archive/' + (flight.geojsonVersion.name?.match(/\d{8}V\d+/)?.[0] || 'unknown') + '.geojson'}
+                                                       download
+                                                       onClick={(e) => e.stopPropagation()}
+                                                       style={{marginLeft: '8px', color: '#ffeb3b', textDecoration: 'underline'}}>
+                                                        Download
+                                                    </a>
+                                                </div>
+                                            )}
+                                            <div className="sidebar-flight-actions">
+                                                <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); startRename(flight.id); }} style={{background: 'rgba(255,255,255,0.1)', color: 'white', padding: '4px 8px', fontSize: '11px'}}>Rename</button>
+                                                <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); duplicateFlight(flight.id); }} style={{background: 'rgba(255,255,255,0.1)', color: '#98d59f', padding: '4px 8px', fontSize: '11px'}}>Duplicate</button>
+                                                <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); deleteFlight(flight.id); }} style={{background: 'rgba(255,255,255,0.1)', color: '#ff6b6b', padding: '4px 8px', fontSize: '11px'}}>Delete</button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                            {savedFlights.length > 0 && (
+                                <div style={{marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)'}}>
+                                    <button className="btn btn-sm" onClick={exportFlightsToFile} style={{width: '100%', background: 'rgba(255,255,255,0.1)', color: '#98d59f', padding: '8px', fontSize: '12px'}}>
+                                        📤 Export Flights to File
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Content Area */}
+                        {!currentFlightId ? (
+                            /* Welcome Screen */
+                            <div className="welcome-screen">
+                                <h2 style={{fontSize: '24px', color: '#2d3748', marginBottom: '8px'}}>Welcome</h2>
+                                <p style={{color: '#718096', marginBottom: '32px'}}>Create a new flight application or select one from the sidebar</p>
+                                <button className="btn btn-primary" onClick={() => { setSaveName(''); setShowSaveModal(true); }} style={{padding: '16px 32px', fontSize: '16px', background: '#0c3210'}}>
+                                    + New Flight Application
+                                </button>
+                            </div>
+                        ) : (
+                            /* Flight Editor - Form and Map panels */
+                            <>
+                        {/* Left Panel - Form */}
+                        <div className="panel">
+                            <div className="panel-header">
+                                <span>Application Details</span>
+                                <button className="btn btn-sm btn-success" onClick={saveFlight}>💾 Save</button>
+                            </div>
+                            <div className="tabs">
+                                <div className={"tab" + (activeTab === 'operator' ? ' active' : '')} onClick={() => setActiveTab('operator')}>Operator</div>
+                                <div className={"tab" + (activeTab === 'flight' ? ' active' : '')} onClick={() => setActiveTab('flight')}>Flight Details</div>
+                                <div className={"tab" + (activeTab === 'zone' ? ' active' : '')} onClick={() => setActiveTab('zone')}>Zone & Time</div>
+                            </div>
+                            <div className="panel-body">
+                                {activeTab === 'operator' && (
+                                    <div className="form-grid">
+                                        <div className="form-group full-width">
+                                            <label>UAS Operator Name <span style={{color: '#38a169', fontSize: '11px'}}>✓ Locked</span></label>
+                                            <input type="text" value={formData.operatorName} readOnly style={{background: '#f0fff4', color: '#22543d'}} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>Registration Number <span style={{color: '#38a169', fontSize: '11px'}}>✓ Locked</span></label>
+                                            <input type="text" value={formData.registrationNumber} readOnly style={{background: '#f0fff4', color: '#22543d'}} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>OA Number <span style={{color: '#38a169', fontSize: '11px'}}>✓ Locked</span></label>
+                                            <input type="text" value={formData.authNumber} readOnly style={{background: '#f0fff4', color: '#22543d'}} />
+                                            <small>Specific Category Operations</small>
+                                        </div>
+                                        <div className="form-group">
+                                            <label>SAIL <span style={{color: '#38a169', fontSize: '11px'}}>✓ Locked</span></label>
+                                            <input type="text" value={formData.sailLevel} readOnly style={{background: '#f0fff4', color: '#22543d'}} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>VLOS / BVLOS <span style={{color: '#38a169', fontSize: '11px'}}>✓ VLOS</span></label>
+                                            <input type="text" value="VLOS" readOnly style={{background: '#f0fff4', color: '#22543d'}} />
+                                        </div>
+                                        <div className="form-group full-width">
+                                            <label>UAS Model</label>
+                                            <select value={formData.uasModel} onChange={(e) => updateForm('uasModel', e.target.value)}>
+                                                {UAS_MODELS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="form-group full-width">
+                                            <label>Remote Pilot(s)</label>
+                                            <div style={{display: 'flex', gap: '16px', flexWrap: 'wrap', padding: '12px', background: '#f7fafc', borderRadius: '8px', border: '1px solid #e2e8f0'}}>
+                                                {PILOTS.map(pilot => (
+                                                    <label key={pilot.id} style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer'}}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedPilots.includes(pilot.id)}
+                                                            onChange={() => togglePilot(pilot.id)}
+                                                            style={{width: '18px', height: '18px', cursor: 'pointer'}}
+                                                        />
+                                                        <span>{pilot.name}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                            {formData.pilotNames && <small style={{color: '#38a169'}}>Selected: {formData.pilotNames}</small>}
+                                        </div>
+                                        <div className="form-group">
+                                            <label>Mobile Phone (Primary)</label>
+                                            <select value={formData.phonePrimary} onChange={(e) => updateForm('phonePrimary', e.target.value)}>
+                                                {PHONE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="form-group">
+                                            <label>Mobile Phone (Alternate)</label>
+                                            <select value={formData.phoneAlternate} onChange={(e) => updateForm('phoneAlternate', e.target.value)}>
+                                                {PHONE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'zone' && (
+                                    <div className="form-grid">
+                                        <div className="form-group full-width">
+                                            <label>Detected Airspace Zones</label>
+                                            {formData.detectedZones ? (
+                                                <div style={{background: '#f0fff4', border: '1px solid #9ae6b4', borderRadius: '8px', padding: '12px'}}>
+                                                    {JSON.parse(formData.detectedZones).map((zone, idx) => (
+                                                        <div key={idx} style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: idx < JSON.parse(formData.detectedZones).length - 1 ? '8px' : 0}}>
+                                                            <span style={{background: zone.type === 'PROHIBITED' ? '#ff0000' : zone.type === 'CONDITIONAL' ? '#ffeb3b' : '#ff9800', color: zone.type === 'CONDITIONAL' ? '#000' : '#fff', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600'}}>{zone.id}</span>
+                                                            <span style={{fontSize: '13px'}}>{zone.name}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div style={{background: '#f7fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', color: '#718096', fontSize: '13px'}}>
+                                                    Draw a flight area on the map to auto-detect zones
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="form-group">
+                                            <label>Zone ID(s)</label>
+                                            <input type="text" value={formData.zoneId} onChange={(e) => updateForm('zoneId', e.target.value)} placeholder="Auto-detected from map" readOnly style={{background: '#f7fafc'}} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>Zone Name(s)</label>
+                                            <input type="text" value={formData.zoneName} onChange={(e) => updateForm('zoneName', e.target.value)} placeholder="Auto-detected from map" readOnly style={{background: '#f7fafc'}} />
+                                        </div>
+                                        <div className="form-group full-width">
+                                            <label>Description of the Area</label>
+                                            <input type="text" value={formData.areaDescription} onChange={(e) => updateForm('areaDescription', e.target.value)} placeholder="e.g., Dublin 8" />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>Maximum Altitude (AMSL)</label>
+                                            <input type="text" value={formData.maxAltitude} onChange={(e) => updateForm('maxAltitude', e.target.value)} placeholder="e.g. 600ft" />
+                                            <small>Auto-calculated from terrain + AGL (editable)</small>
+                                        </div>
+                                        <div className="form-group">
+                                            <label>Maximum Height (AGL)</label>
+                                            <input type="text" value={formData.maxHeight} onChange={(e) => updateForm('maxHeight', e.target.value)} placeholder="e.g., 400ft" />
+                                            <small>Above Ground Level</small>
+                                        </div>
+                                        <div className="form-group full-width">
+                                            <label>Proposed Date(s) & Time(s) (Local)</label>
+                                            <div className="datetime-row">
+                                                <div className="form-group">
+                                                    <small style={{marginBottom: '4px', display: 'block'}}>Start</small>
+                                                    <input type="datetime-local" value={formData.startDateTime} onChange={(e) => handleDateTimeChange('startDateTime', e.target.value)} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <small style={{marginBottom: '4px', display: 'block'}}>End</small>
+                                                    <input type="datetime-local" value={formData.endDateTime} onChange={(e) => handleDateTimeChange('endDateTime', e.target.value)} />
+                                                </div>
+                                            </div>
+                                            {formData.proposedDateTime && <small style={{color: '#38a169', marginTop: '8px', display: 'block'}}>📅 {formData.proposedDateTime}</small>}
+                                        </div>
+                                        <div className="form-group">
+                                            <label>Duration (HH:MM)</label>
+                                            <input type="text" value={formData.duration} onChange={(e) => updateForm('duration', e.target.value)} placeholder="e.g., 4:00" />
+                                            <small>Auto-calculated or manual</small>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'flight' && (
+                                    <div>
+                                        {(!formData.startDateTime || !formData.endDateTime) && (
+                                            <div style={{marginBottom: '12px', padding: '12px 14px', background: '#fff5f5', border: '1px solid #fc8181', borderRadius: '8px', color: '#742a2a', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '10px'}}>
+                                                <span style={{fontSize: '18px'}}>⚠️</span>
+                                                <span style={{flex: 1}}><strong>Set your proposed dates first.</strong> Zone detection filters dormant event-based zones by flight time.</span>
+                                                <button className="btn btn-sm btn-primary" onClick={() => setActiveTab('zone')}>Go to Zone &amp; Time</button>
+                                            </div>
+                                        )}
+                                        <div className="map-instructions">
+                                            <strong>📍 How to define your flight area:</strong><br/>
+                                            1. Choose Circle or Polygon below, OR import a KML file<br/>
+                                            2. Use the drawing tool on the map (top right)<br/>
+                                            3. For polygon: click to add points, double-click to finish<br/>
+                                            4. For circle: click center, drag to set radius
+                                        </div>
+                                        <div style={{marginBottom: '16px', padding: '12px', background: '#f7fafc', borderRadius: '8px', border: '1px dashed #cbd5e0'}}>
+                                            <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer'}}>
+                                                <span style={{fontSize: '20px'}}>📂</span>
+                                                <span><strong>Import KML File</strong> - Load flight area from file</span>
+                                                <input type="file" accept=".kml,.kmz" onChange={handleKMLImport} style={{display: 'none'}} />
+                                                <span className="btn btn-sm btn-primary" style={{marginLeft: 'auto'}}>Choose File</span>
+                                            </label>
+                                        </div>
+                                        <div className="shape-toggle">
+                                            <div className={"shape-btn" + (shapeType === 'polygon' ? ' active' : '')} onClick={() => setShapeType('polygon')}>
+                                                <span className="shape-btn-icon">⬡</span>
+                                                Polygon
+                                            </div>
+                                            <div className={"shape-btn" + (shapeType === 'circle' ? ' active' : '')} onClick={() => setShapeType('circle')}>
+                                                <span className="shape-btn-icon">⭕</span>
+                                                Circle
+                                            </div>
+                                        </div>
+                                        <button className="btn btn-secondary btn-sm" onClick={clearDrawing} style={{marginBottom: '12px'}}>🗑️ Clear Drawing</button>
+                                        {circleData && (
+                                            <div className="form-grid" style={{marginBottom: '16px'}}>
+                                                <div className="form-group">
+                                                    <label>Circle Centre</label>
+                                                    <input type="text" value={formData.circleCenter} readOnly />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label>Radius</label>
+                                                    <input type="text" value={formData.circleRadius} readOnly />
+                                                </div>
+                                            </div>
+                                        )}
+                                        {coordinates.length > 0 && (
+                                            <div className="coordinates-display">
+                                                <strong>Polygon Coordinates (WGS-84 DMS):</strong>
+                                                <pre>{formData.polygonCoords}</pre>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Right Panel - Map */}
+                        <div className="panel panel-fit">
+                            <div className="panel-header">
+                                <span>Flight Area Map</span>
+                                <div className="btn-group">
+                                    <button className="btn btn-secondary btn-sm" onClick={() => mapInstanceRef.current?.setView([53.3498, -6.2603], 12)}>Dublin</button>
+                                    <button className="btn btn-secondary btn-sm" onClick={() => mapInstanceRef.current?.setView([53.4264, -6.2499], 13)}>DUB Airport</button>
+                                    <button className="btn btn-secondary btn-sm" onClick={() => mapInstanceRef.current?.setView([51.8985, -8.4756], 12)}>Cork</button>
+                                    <button className="btn btn-secondary btn-sm" onClick={() => mapInstanceRef.current?.setView([52.6992, -8.9249], 12)}>Shannon</button>
+                                    <button className="btn btn-secondary btn-sm" onClick={() => mapInstanceRef.current?.setView([53.2707, -9.0568], 12)}>Galway</button>
+                                    <button className="btn btn-secondary btn-sm" onClick={() => mapInstanceRef.current?.setView([52.6638, -8.6267], 12)}>Limerick</button>
+                                </div>
+                            </div>
+                            <div className="panel-body panel-body-map">
+                                <div id="map" ref={mapRef}></div>
+                                <div className="export-section">
+                                    <div style={{fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '12px'}}>Export Options</div>
+                                    <div className="export-grid">
+                                        <div className="export-card" onClick={downloadScreenshot}>
+                                            <div className="export-card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>
+                                            <div className="export-card-title">Screenshot</div>
+                                            <div className="export-card-desc">PNG image</div>
+                                        </div>
+                                        <div className="export-card" onClick={generateKML}>
+                                            <div className="export-card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+                                            <div className="export-card-title">KML File</div>
+                                            <div className="export-card-desc">Flight volume</div>
+                                        </div>
+                                        <div className="export-card" onClick={generatePDF}>
+                                            <div className="export-card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+                                            <div className="export-card-title">PDF Form</div>
+                                            <div className="export-card-desc">U.F.101 document</div>
+                                        </div>
+                                        <div className="export-card" onClick={exportAll} style={{background: '#f0fdf4', borderColor: '#86efac'}}>
+                                            <div className="export-card-icon" style={{color: '#166534'}}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div>
+                                            <div className="export-card-title">Export All</div>
+                                            <div className="export-card-desc">Download all</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        </>
+                        )}
+                    </div>
+
+                    {toast && <div className="toast">{toast}</div>}
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
