@@ -170,6 +170,15 @@ app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   next();
 });
+// The blanket no-store above is right for app data, but it stops the browser
+// caching media — Chrome's video element then never buffers and sits on the
+// poster forever. These files are immutable, so let them be cached properly.
+// Must sit after the no-store middleware to override it, and before static.
+app.use('/video', (req, res, next) => {
+  res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 // Trust proxy for Vercel
 app.set('trust proxy', 1);
