@@ -4248,10 +4248,31 @@
     let detectedZonesSelection = {};
 
     async function loadGeozoneVersions() {
-      // Built-in versions (static manifest) + any uploaded versions (server),
-      // merged, deduped by id, newest validFrom first.
+      // Three sources, merged and deduped by id, newest validFrom first:
+      //   archive  - the auto-archived IAA releases (daily checker + historical),
+      //              served from the shared /api/zone-versions endpoint. This is
+      //              where the current release lives, so it takes priority.
+      //   uploaded - versions added by hand via the Airspace Zones modal.
+      //   builtin  - the static /geozones/index.json shipped with the app.
+      let archive = [];
       let builtin = [];
       let uploaded = [];
+      try {
+        const res = await fetch('/api/zone-versions');
+        if (res.ok) {
+          const data = await res.json();
+          // Map the shared shape {id,issued,label} to the planner's version shape.
+          archive = (data.versions || []).map(v => ({
+            id: v.id,
+            name: `IAA ${v.label}`,
+            issued: v.issued,
+            validFrom: v.issued,
+            url: `/zones/${v.id}`
+          }));
+        }
+      } catch (err) {
+        console.error('Error loading archived geozone versions:', err);
+      }
       try {
         const res = await fetch('/geozones/index.json');
         const data = await res.json();
@@ -4269,13 +4290,13 @@
         console.error('Error loading uploaded geozone versions:', err);
       }
       const seen = new Set();
-      geozoneVersions = [...uploaded, ...builtin].filter(v => {
+      geozoneVersions = [...archive, ...uploaded, ...builtin].filter(v => {
         if (!v || !v.id || seen.has(v.id)) return false;
         seen.add(v.id);
         return true;
       });
       geozoneVersions.sort((a, b) => (b.validFrom || '').localeCompare(a.validFrom || ''));
-      console.log('Loaded geozone versions:', geozoneVersions.length, `(${uploaded.length} uploaded)`);
+      console.log('Loaded geozone versions:', geozoneVersions.length, `(${archive.length} archived, ${uploaded.length} uploaded)`);
     }
 
     async function loadGeozoneData(versionId) {
@@ -4558,8 +4579,16 @@
       const select = document.getElementById('geozoneVersionSelect');
       if (!select) return;
 
-      select.innerHTML = '<option value="">-- Select Version --</option>' +
-        geozoneVersions.map(v => `<option value="${v.id}" ${v.id === currentVersionId ? 'selected' : ''}>${v.name}${v.validFrom ? ` (valid from ${v.validFrom})` : ''}</option>`).join('');
+      // A plan already detected against a version keeps that version (audit
+      // trail). Otherwise default to the newest — the list is sorted newest
+      // first — so a fresh detection uses the current dataset without the user
+      // having to choose.
+      const hasStored = currentVersionId && geozoneVersions.some(v => v.id === currentVersionId);
+      const effectiveId = hasStored ? currentVersionId : (geozoneVersions[0] && geozoneVersions[0].id) || '';
+
+      select.innerHTML = geozoneVersions.map((v, i) =>
+        `<option value="${v.id}" ${v.id === effectiveId ? 'selected' : ''}>${v.name}${i === 0 ? ' — latest' : ''}${v.validFrom ? ` (valid from ${v.validFrom})` : ''}</option>`
+      ).join('');
     }
 
     async function loadEvidence(planId) {

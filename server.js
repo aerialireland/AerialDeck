@@ -1860,13 +1860,14 @@ app.get('/uf101/:asset', requirePage, async (req, res) => {
   }
 });
 
-// The zone datasets the Creator can detect against. Unions the two archive
+// The archived IAA zone datasets, shared by both sections — the U.F.101 Creator
+// and the Flight Planner's Airspace Zones detector. Unions the two archive
 // locations: geozones/archive/ (fed by the daily IAA checker) and the older
 // uf101/geojson-archive/ (the historical releases saved flights reference).
 // Deduped by version id; newest first. Cheap — lists filenames, downloads
 // nothing. The id encodes the date (20260714V1), so a lexical sort is
 // chronological and the issue date needs no file read.
-app.get('/api/uf101/zone-versions', requirePage, async (req, res) => {
+app.get('/api/zone-versions', requirePage, async (req, res) => {
   try {
     const seen = new Map();  // id -> storage prefix it lives under
     for (const prefix of ['geozones/archive', 'uf101/geojson-archive']) {
@@ -1892,8 +1893,8 @@ app.get('/api/uf101/zone-versions', requirePage, async (req, res) => {
 });
 
 // Serve any one zone dataset as GeoJSON, from whichever archive holds it.
-// Immutable per id, so the browser may cache it hard.
-app.get('/uf101/zones/:versionId', requirePage, async (req, res) => {
+// Shared by both sections. Immutable per id, so the browser may cache it hard.
+app.get('/zones/:versionId', requirePage, async (req, res) => {
   if (!/^\d{8}V\d+$/.test(req.params.versionId)) {
     return res.status(400).send('Bad version id');
   }

@@ -17,7 +17,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
     <!-- AERIALDECK: the zone dataset is no longer loaded by a fixed <script>.
-         It is fetched at runtime from /uf101/zones/<version> so the user can pick
+         It is fetched at runtime from /zones/<version> so the user can pick
          which IAA release to detect against (see the Zone dataset selector). The
          detection code still reads the global IAA_ZONES_DATA; the bootstrap below
          assigns window.IAA_ZONES_DATA once a version is loaded, and the existing
@@ -1053,7 +1053,7 @@
                 if (!id) return;
                 try {
                     setZonesReady(false);
-                    const res = await fetch('/uf101/zones/' + id);
+                    const res = await fetch('/zones/' + id);
                     if (!res.ok) throw new Error('zones ' + res.status);
                     window.IAA_ZONES_DATA = await res.json();
                     setZoneVersionId(id);
@@ -1084,7 +1084,7 @@
             useEffect(() => {
                 (async () => {
                     try {
-                        const res = await fetch('/api/uf101/zone-versions');
+                        const res = await fetch('/api/zone-versions');
                         const { versions } = await res.json();
                         setZoneVersions(versions || []);
                         if (versions && versions.length) await loadZoneVersion(versions[0].id);
