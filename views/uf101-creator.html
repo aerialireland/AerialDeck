@@ -136,10 +136,15 @@
             padding: 1.25rem;
             display: flex;
             flex-direction: column;
-            /* Kept at the original value. The grid row height, and therefore the
-               map panel's height, is set by whichever column is tallest — see
-               the PDF note at the top of this stylesheet. */
-            max-height: calc(100vh - 185px);
+            /* Stretches to the full grid row so it lines up with the other two
+               panels. min-height:0 lets the flight list scroll inside it.
+
+               The cap below is on the LIST, not the card: the grid row height is
+               set by whichever column is tallest, so an uncapped list of flights
+               would grow the row and with it the map panel — changing the map's
+               aspect ratio and the page-2 PDF capture. See the note at the top. */
+            height: 100%;
+            min-height: 0;
         }
         .sidebar-header {
             font-size: 0.7rem;
@@ -154,7 +159,16 @@
             gap: 0.5rem;
             flex-shrink: 0;
         }
-        .sidebar-flights { flex: 1; overflow-y: auto; min-height: 0; margin: 0 -0.25rem; padding: 0 0.25rem; }
+        .sidebar-flights {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+            /* Caps how tall the list can make the card intrinsically, so a long
+               list scrolls instead of stretching the grid row. */
+            max-height: calc(100vh - 20rem);
+            margin: 0 -0.25rem;
+            padding: 0 0.25rem;
+        }
         .sidebar-search {
             padding: 0.4rem 0.6rem;
             border-radius: 6px;
@@ -1656,7 +1670,7 @@
                                 <span className="read-only-dot"></span>
                                 <span>Read-only</span>
                             </div>
-                            <a className="header-link" href="/home">AerialDeck</a>
+                            <a className="header-link" href="/">Flight Plan</a>
                             <button className="logout-btn" onClick={async () => {
                                 await fetch('/api/logout', { method: 'POST' });
                                 window.location.href = '/';
