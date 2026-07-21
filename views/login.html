@@ -61,7 +61,7 @@
       .bg-overlay {
         background:
           linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)),
-          url('/video/wicklow-poster.jpg') center / cover no-repeat;
+          url('/video/poolbeg-poster.jpg') center / cover no-repeat;
       }
     }
 
@@ -120,10 +120,12 @@
 
   <!-- WebM first: a Chromium build without the proprietary H.264 decoder stalls
        on the MP4 silently rather than falling through to it. -->
+  <!-- Both files are encoded with no audio stream at all, so there is nothing to
+       unmute even if the muted attribute is lost. -->
   <video class="bg-video" id="bgVideo" autoplay muted loop playsinline
-         preload="auto" poster="/video/wicklow-poster.jpg" aria-hidden="true" tabindex="-1">
-    <source src="/video/wicklow.webm" type="video/webm">
-    <source src="/video/wicklow.mp4" type="video/mp4">
+         preload="auto" poster="/video/poolbeg-poster.jpg" aria-hidden="true" tabindex="-1">
+    <source src="/video/poolbeg.webm" type="video/webm">
+    <source src="/video/poolbeg.mp4" type="video/mp4">
   </video>
   <div class="bg-overlay"></div>
 
