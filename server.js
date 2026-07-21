@@ -1757,12 +1757,33 @@ app.get('/api/cron/check-iaa-zones', async (req, res) => {
     // daily check.
     const driveResult = await syncToDrive(say);
 
+    // Email only when something actually changed, so this stays worth reading.
+    let emailResult = { sent: false, reason: 'nothing changed' };
+    if (result.action === 'archived' || result.action === 'republished') {
+      const notify = require('./lib/notify.js');
+      const diff = result.diff || { added: [], removed: [], changed: [], counts: { added: 0, removed: 0, changed: 0 } };
+      const c = diff.counts;
+      const verb = result.action === 'republished' ? 'republished' : 'updated';
+      emailResult = await notify.send({
+        subject: `IAA zones ${verb}: ${result.versionId} — ${c.added} added, ${c.removed} removed, ${c.changed} changed`,
+        html: notify.renderZoneDiff({
+          versionId: result.versionId,
+          previousId: result.previousId || null,
+          diff,
+          features: result.features
+        })
+      });
+      say(emailResult.sent ? 'alert email sent' : `alert email not sent: ${emailResult.reason}`);
+    }
+
     res.json({
       ok: true,
       action: result.action,
       versionId: result.versionId,
       features: result.features,
+      diff: result.diff ? result.diff.counts : null,
       drive: driveResult,
+      email: emailResult,
       log: lines
     });
   } catch (err) {
