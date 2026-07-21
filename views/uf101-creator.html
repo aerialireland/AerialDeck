@@ -331,7 +331,8 @@
         .profile-badge { background: var(--accent-light); color: var(--accent-dark); padding: 0.2rem 0.75rem; border-radius: 999px; font-size: 0.75rem; }
 
         .export-section { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }
-        .export-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; }
+        .export-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; }
+        @media (max-width: 1400px) { .export-grid { grid-template-columns: repeat(3, 1fr); } }
         .export-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -350,6 +351,23 @@
         .export-card-icon { font-size: 1.5rem; margin-bottom: 0.35rem; color: var(--text-secondary); }
         .export-card-title { font-weight: 600; color: var(--text-primary); font-size: 0.78rem; }
         .export-card-desc { font-size: 0.66rem; color: var(--text-muted); margin-top: 0.1rem; }
+
+        /* Convert to Flight Plan — the only card here that writes something
+           rather than downloading a file, so it is a brighter green to set it
+           apart from the four exports. */
+        .export-card-convert {
+            background: #3fae5a;
+            border-color: #349349;
+        }
+        .export-card-convert:hover {
+            background: #349349;
+            border-color: #2b7a3c;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 24, 3, 0.18);
+        }
+        .export-card-convert .export-card-icon,
+        .export-card-convert .export-card-title { color: #ffffff; }
+        .export-card-convert .export-card-desc { color: rgba(255, 255, 255, 0.85); }
 
         /* Tabs — Flight Plan uses pills, not an underline */
         /* Vertical padding kept level with the original 12px .tab padding: the
@@ -504,6 +522,9 @@
             const [activeTab, setActiveTab] = useState('operator');
             const [shapeType, setShapeType] = useState('polygon');
             const [toast, setToast] = useState(null);
+            // Guards the Convert to Flight Plan button against a double-click
+            // creating two plans.
+            const [converting, setConverting] = useState(false);
             const [drawnLayer, setDrawnLayer] = useState(null);
             const [coordinates, setCoordinates] = useState([]);
             const [circleData, setCircleData] = useState(null);
@@ -1655,6 +1676,93 @@
                 showToast('All files exported!');
             };
 
+            // AERIALDECK: create a flight plan in the Flight Planner section from
+            // this application. Carries across three things only — the KML
+            // geometry, the name, and the first day of the permission window.
+            //
+            // Note this does NOT touch flights-data.json, so the read-only rule
+            // for this copy still holds; it writes to AerialDeck's own Supabase
+            // flight_plans table through the same API the planner uses.
+            const convertToFlightPlan = async () => {
+                if (converting) return;
+
+                // Geometry comes from the live drawing state, never from
+                // shapeType — that flag drifts when a saved flight is reloaded.
+                // generatePDF() reads these same two for the same reason.
+                let ring = null;
+                if (circleData) {
+                    // Same 36-point approximation generateKML() uses, so the plan
+                    // matches the KML that goes to the IAA rather than being a
+                    // second, slightly different circle.
+                    const c = circleData.center, r = circleData.radius, pts = 36;
+                    ring = [];
+                    for (let i = 0; i <= pts; i++) {
+                        const a = (i / pts) * 2 * Math.PI;
+                        ring.push([
+                            c.lng + (r / (111320 * Math.cos(c.lat * Math.PI / 180))) * Math.sin(a),
+                            c.lat + (r / 111320) * Math.cos(a)
+                        ]);
+                    }
+                } else if (coordinates.length >= 3) {
+                    ring = coordinates.map(ll => [ll.lng, ll.lat]);
+                }
+
+                if (!ring) { showToast('Draw the operating area first'); return; }
+
+                // datetime-local is 'YYYY-MM-DDTHH:mm' in local time, so the date
+                // part is a straight slice — no timezone conversion, which would
+                // shift the day.
+                const startDate = (formDataRef.current.startDateTime || '').slice(0, 10);
+                if (!startDate) { showToast('Set the permission start date first'); return; }
+
+                const existing = savedFlightsRef.current.find(f => f.id === currentFlightId);
+                const planName = (existing && existing.name) || formData.areaDescription || 'U.F.101 flight';
+
+                setConverting(true);
+                try {
+                    // flight_plans.name is UNIQUE in the database, and a U.F.101
+                    // application very often shares its name with the plan it
+                    // belongs to. Check first so the user gets a clear message
+                    // instead of a 500 from the constraint.
+                    const existingPlans = await (await fetch('/api/flight-plans')).json();
+                    if (Array.isArray(existingPlans) && existingPlans.some(p => p.name === planName)) {
+                        showToast('A flight plan named "' + planName + '" already exists — rename this application first');
+                        return;
+                    }
+
+                    const res = await fetch('/api/flight-plans', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: planName, date: startDate })
+                    });
+                    if (!res.ok) throw new Error('create returned ' + res.status);
+                    const plan = await res.json();
+
+                    const geoRes = await fetch('/api/flight-plans/' + plan.id + '/evidence/flightGeographyMap', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            kmlCoordinates: ring,          // [[lng, lat], ...] — the planner's format
+                            kmlFilename: planName + '.kml',
+                            savedAt: new Date().toISOString()
+                        })
+                    });
+                    // The plan exists at this point even if the geography failed,
+                    // so say so rather than implying nothing happened.
+                    if (!geoRes.ok) {
+                        showToast('Plan created, but the KML did not attach — add it in the planner');
+                        return;
+                    }
+
+                    showToast('Flight plan created: ' + planName);
+                } catch (err) {
+                    console.error('Convert to flight plan failed:', err);
+                    showToast('Could not create the flight plan');
+                } finally {
+                    setConverting(false);
+                }
+            };
+
             return (
                 <div className="app-wrapper">
                     {/* AERIALDECK: top bar matched to the Flight Plan section.
@@ -2017,6 +2125,13 @@
                                             <div className="export-card-icon" style={{color: 'var(--accent-dark)'}}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div>
                                             <div className="export-card-title">Export All</div>
                                             <div className="export-card-desc">Download all</div>
+                                        </div>
+                                        <div className="export-card export-card-convert"
+                                             onClick={convertToFlightPlan}
+                                             title="Create a flight plan in the Flight Planner from this application">
+                                            <div className="export-card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14"/><polyline points="12 5 19 12 12 19"/></svg></div>
+                                            <div className="export-card-title">{converting ? 'Creating…' : 'Convert to Flight Plan'}</div>
+                                            <div className="export-card-desc">KML, name and start date</div>
                                         </div>
                                     </div>
                                 </div>
