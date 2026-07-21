@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>AerialDeck</title>
 
@@ -14,225 +14,267 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Inter stands in for Aktiv Grotesk, which the original design used. Aktiv
+       Grotesk is a licensed Dalton Maag face and this repo is public, so the OTFs
+       are not committed. To switch: add the @font-face rules and change LABEL_FONT
+       below. JetBrains Mono (row numbers) is OFL-licensed, so it loads from Google. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
 
   <style>
-    /* Variables copied from public/index.html so the portal matches the rest of
-       AerialDeck exactly. If the palette changes there, mirror it here. */
-    :root {
-      --bg-primary: #ffffff;
-      --bg-secondary: #f8faf8;
-      --bg-card: #ffffff;
-      --text-primary: #001803;
-      --text-secondary: #3d5a40;
-      --text-muted: #6b8a6e;
-      --accent: #6ba671;
-      --accent-light: #e8f5e9;
-      --accent-dark: #4a8550;
-      --border: #e0e8e0;
-      --border-light: #f0f4f0;
-    }
-
-    body.dark {
-      --bg-primary: #1c1c1c;
-      --bg-secondary: #141414;
-      --bg-card: #212121;
-      --text-primary: #e3e3e3;
-      --text-secondary: #aaaaaa;
-      --text-muted: #737373;
-      --accent: #6ba671;
-      --accent-light: #1e2e20;
-      --accent-dark: #8bc895;
-      --border: #303030;
-      --border-light: #272727;
-    }
-
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { margin: 0; }
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg-secondary);
-      color: var(--text-primary);
+      background: #ffffff;
+      font-family: 'Inter', system-ui, sans-serif;
+      color: #001803;
+    }
+    a { text-decoration: none; }
+
+    #stage { position: relative; min-height: 100vh; width: 100%; overflow: hidden; background: #fff; }
+
+    /* The propeller. Sage fill, shaped by the mark as a mask, rotated from JS so
+       the knockout in the wordmark can track the exact same angle. */
+    #mark-box {
+      position: absolute;
+      top: -45vh; right: -12vw;
+      width: 190vh; height: 190vh;
+      pointer-events: none;
+      z-index: 0;
+    }
+    #mark-img {
+      width: 100%; height: 100%;
+      background: #98D59F;
+      opacity: 0.9;
+      -webkit-mask: url("/logo-mark.png") center / contain no-repeat;
+      mask: url("/logo-mark.png") center / contain no-repeat;
+      transform-origin: 50% 50%;
+    }
+
+    .signout {
+      position: absolute; top: 28px; right: 32px; z-index: 5;
+      display: flex; align-items: center; justify-content: center;
+      width: 44px; height: 44px; border-radius: 999px;
+      color: #001803; background: none; border: none; cursor: pointer;
+      transition: color .15s ease, background .15s ease;
+    }
+    .signout:hover { background: rgba(0,24,3,0.06); }
+
+    main {
+      position: relative; z-index: 2;
+      max-width: 1400px; margin: 0;
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
+      display: flex; flex-direction: column; justify-content: center;
+      padding: clamp(48px,9vh,120px) clamp(48px,6vw,100px) clamp(48px,9vh,120px) clamp(80px,12vw,220px);
     }
 
-    .header {
-      background: var(--bg-card);
-      border-bottom: 1px solid var(--border);
-      padding: 1rem 2rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .header-logo { height: 44px; width: auto; }
-    .header-actions { display: flex; gap: 1rem; align-items: center; }
+    .wordmark-row { display: flex; align-items: center; gap: 18px; margin-bottom: clamp(40px,8vh,88px); }
+    #logo-canvas { display: block; width: clamp(360px,90vw,1200px); aspect-ratio: 600 / 134; height: auto; }
 
-    .logout-btn {
-      background: none;
-      border: 1px solid var(--border);
-      color: var(--text-secondary);
-      padding: 0.5rem 1rem;
-      border-radius: 8px;
-      cursor: pointer;
-      font-family: inherit;
-      font-size: 0.875rem;
+    nav { display: flex; flex-direction: column; border-top: 1px solid rgba(0,24,3,0.16); }
+    nav a {
+      position: relative;
+      display: flex; align-items: center;
+      gap: clamp(20px,4vw,54px);
+      padding: clamp(24px,3.4vh,42px) clamp(18px,3vw,40px);
+      border-bottom: 1px solid rgba(0,24,3,0.16);
+      color: #001803;
+      transition: color .25s ease;
     }
-    .logout-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
-
-    .portal {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      max-width: 960px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 3rem 2rem 4rem;
-    }
-
-    .portal-intro { margin-bottom: 2.5rem; }
-    .portal-intro h1 {
-      font-size: 1.75rem;
+    nav a:hover { color: #57996a; }
+    nav a .num {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
       font-weight: 700;
-      color: var(--text-primary);
-      margin-bottom: 0.5rem;
+      font-size: clamp(15px,1.4vw,20px);
+      color: #98D59F;
+      width: 2.4ch;
+      flex: none;
     }
-    .portal-intro p { color: var(--text-muted); font-size: 1rem; }
+    .lblc { flex: 1; display: block; height: clamp(34px,4.9vw,66px); }
 
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 1.5rem;
-    }
-
-    .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 2rem;
-      text-decoration: none;
-      color: inherit;
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-    }
-    .card:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 12px 28px rgba(0, 24, 3, 0.09);
-      border-color: var(--accent);
-    }
-    body.dark .card:hover { box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45); }
-
-    .card-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 12px;
-      background: var(--accent-light);
-      color: var(--accent-dark);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.5rem;
-      margin-bottom: 0.25rem;
-    }
-    .card h2 { font-size: 1.25rem; font-weight: 600; color: var(--text-primary); }
-    .card p { color: var(--text-secondary); font-size: 0.9rem; line-height: 1.55; }
-
-    .card-meta {
-      margin-top: auto;
-      padding-top: 1rem;
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-
-    .badge {
-      display: inline-block;
-      background: var(--accent-light);
-      color: var(--accent-dark);
-      font-size: 0.7rem;
-      font-weight: 600;
-      padding: 0.15rem 0.5rem;
-      border-radius: 999px;
-      letter-spacing: 0.02em;
-    }
-
-    @media (max-width: 720px) {
-      .cards { grid-template-columns: 1fr; }
-      .portal { padding: 2rem 1.25rem 3rem; }
-      .header { padding: 1rem 1.25rem; }
-    }
+    /* Without JS (or if an image fails) the canvases stay blank, so give the
+       links real text to fall back to. */
+    .lbl-fallback { position: absolute; left: -9999px; }
+    @media (prefers-reduced-motion: reduce) { /* handled in JS: angle is frozen */ }
   </style>
 </head>
 <body>
 
-  <header class="header">
-    <img src="/logo.png" alt="Aerial" class="header-logo">
-    <div class="header-actions">
-      <button class="logout-btn" id="logoutBtn">Sign Out</button>
-    </div>
-  </header>
+  <div id="stage">
 
-  <main class="portal">
-    <div class="portal-intro">
-      <h1>AerialDeck</h1>
-      <p>Flight planning, record keeping and airspace applications.</p>
-    </div>
+    <div id="mark-box" aria-hidden="true"><div id="mark-img"></div></div>
 
-    <div class="cards">
+    <button class="signout" id="signOut" aria-label="Sign out" title="Sign out">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2v10"></path>
+        <path d="M18.4 6.6a9 9 0 1 1-12.77.04"></path>
+      </svg>
+    </button>
 
-      <a class="card" href="/uf101">
-        <div class="card-icon">📄</div>
-        <h2>U.F.101 Creator <span class="badge">NEW</span></h2>
-        <p>
-          Build an IAA Form U.F.101 application to fly inside a restricted or
-          prohibited zone. Draw the operating area, detect which UAS geographical
-          zones it intersects, and export the completed form.
-        </p>
-        <div class="card-meta">Form Version 13 &middot; IAA zones 25 May 2026</div>
-      </a>
+    <main>
+      <div class="wordmark-row">
+        <canvas id="logo-canvas" role="img" aria-label="AerialDeck"></canvas>
+      </div>
 
-      <a class="card" href="/">
-        <div class="card-icon">🚁</div>
-        <h2>Flight Plan</h2>
-        <p>
-          The flight planning dashboard — flight plans and evidence, flight logs,
-          drones, batteries, maintenance, training, incidents and SORA
-          documentation.
-        </p>
-        <div class="card-meta">Dashboard, plans and records</div>
-      </a>
+      <nav>
+        <a href="/uf101">
+          <span class="num">01</span>
+          <canvas class="lblc" data-label="U.F.101 Creator" role="img" aria-label="U.F.101 Creator"></canvas>
+          <span class="lbl-fallback">U.F.101 Creator</span>
+        </a>
+        <a href="/">
+          <span class="num">02</span>
+          <canvas class="lblc" data-label="Flight Plans" role="img" aria-label="Flight Plans"></canvas>
+          <span class="lbl-fallback">Flight Plans</span>
+        </a>
+      </nav>
+    </main>
 
-    </div>
-  </main>
+  </div>
 
   <script>
-    // Match the dark-mode preference set in the Flight Plan section. Same
-    // localStorage key, so the choice carries across both sections.
-    if (localStorage.getItem('aerialDeckDarkMode') === '1') {
-      document.body.classList.add('dark');
+  (function () {
+    'use strict';
+
+    var LABEL_FONT = '"Inter", system-ui, sans-serif';
+    var PERIOD_MS  = 120000;   // one full turn every two minutes
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    var word = new Image();
+    var mark = new Image();
+    var whiteMark = null;
+    var raf = null;
+
+    // A binary white silhouette of the mark, built once. The source art has some
+    // pale, semi-transparent triangles, so it is stacked repeatedly until those
+    // saturate to full alpha before being filled white.
+    function buildWhiteMark() {
+      var n = mark.naturalWidth || 800;
+      var c = document.createElement('canvas');
+      c.width = n; c.height = n;
+      var x = c.getContext('2d');
+      for (var k = 0; k < 24; k++) x.drawImage(mark, 0, 0, n, n);
+      x.globalCompositeOperation = 'source-in';
+      x.fillStyle = '#ffffff';
+      x.fillRect(0, 0, n, n);
+      whiteMark = c;
     }
 
-    // The server already redirects unauthenticated visitors to the login page,
-    // so this is a second line of defence for a session that expires while the
-    // page is open.
-    (async function checkAuth() {
-      try {
-        const res = await fetch('/api/auth/status');
-        const data = await res.json();
-        if (!data.authenticated) window.location.href = '/';
-      } catch (e) { /* offline — leave the page as it is */ }
-    })();
+    function draw(t) {
+      var canvas  = document.getElementById('logo-canvas');
+      var markBox = document.getElementById('mark-box');
+      var markImg = document.getElementById('mark-img');
+      if (!canvas || !markBox || !whiteMark) return;
 
-    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      var dpr = window.devicePixelRatio || 1;
+      var cb  = canvas.getBoundingClientRect();
+      if (!cb.width) return;
+
+      var W = Math.round(cb.width * dpr), H = Math.round(cb.height * dpr);
+      if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+
+      var ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, cb.width, cb.height);
+
+      // One angle shared by the visible propeller and every knockout.
+      var ang = reduceMotion ? 0 : ((t % PERIOD_MS) / PERIOD_MS) * Math.PI * 2;
+      if (markImg) markImg.style.transform = 'rotate(' + (ang * 180 / Math.PI) + 'deg)';
+
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.drawImage(word, 0, 0, cb.width, cb.height);
+
+      // Paint the spinning white mark only where the wordmark is opaque.
+      ctx.globalCompositeOperation = 'source-atop';
+      var mb = markBox.getBoundingClientRect();
+      ctx.save();
+      ctx.translate(mb.left + mb.width / 2 - cb.left, mb.top + mb.height / 2 - cb.top);
+      ctx.rotate(ang);
+      ctx.drawImage(whiteMark, -mb.width / 2, -mb.width / 2, mb.width, mb.width);
+      ctx.restore();
+      ctx.globalCompositeOperation = 'source-over';
+
+      drawLabels(ang, mb);
+    }
+
+    function drawLabels(ang, mb) {
+      var dpr = window.devicePixelRatio || 1;
+      var list = document.querySelectorAll('.lblc');
+      for (var i = 0; i < list.length; i++) {
+        var cv = list[i];
+        var cb = cv.getBoundingClientRect();
+        if (!cb.width) continue;
+
+        var W = Math.round(cb.width * dpr), H = Math.round(cb.height * dpr);
+        if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+
+        var ctx = cv.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, cb.width, cb.height);
+
+        var a = cv.closest('a');
+        var hovered = a && a.matches(':hover');
+        var fs = Math.round(cb.height * 0.86);
+
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = hovered ? '#4f8a5f' : '#70A070';
+        ctx.font = '900 ' + fs + 'px ' + LABEL_FONT;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        try { ctx.letterSpacing = (-0.03 * fs) + 'px'; } catch (e) {}
+        ctx.fillText(cv.dataset.label, 0, cb.height / 2);
+
+        ctx.globalCompositeOperation = 'source-atop';
+        ctx.save();
+        ctx.translate(mb.left + mb.width / 2 - cb.left, mb.top + mb.height / 2 - cb.top);
+        ctx.rotate(ang);
+        ctx.drawImage(whiteMark, -mb.width / 2, -mb.width / 2, mb.width, mb.width);
+        ctx.restore();
+        ctx.globalCompositeOperation = 'source-over';
+        try { ctx.letterSpacing = '0px'; } catch (e) {}
+      }
+    }
+
+    function loop(t) { draw(t || 0); raf = requestAnimationFrame(loop); }
+    function start() { if (raf === null) raf = requestAnimationFrame(loop); }
+    function stop()  { if (raf !== null) { cancelAnimationFrame(raf); raf = null; } }
+
+    // No point burning a frame budget on a tab nobody is looking at.
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) stop(); else start();
+    });
+
+    var loaded = 0;
+    function ready() {
+      if (++loaded !== 2) return;
+      buildWhiteMark();
+      // Wait for the webfont before drawing text to canvas, otherwise the first
+      // frames render in the fallback face and visibly reflow.
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(start);
+      else start();
+    }
+    function failed(which) {
+      return function () { console.error('[home] could not load ' + which + ' — labels will not render'); };
+    }
+    word.onload = ready; word.onerror = failed('/logo.png');
+    mark.onload = ready; mark.onerror = failed('/logo-mark.png');
+    word.src = '/logo.png';
+    mark.src = '/logo-mark.png';
+
+    document.getElementById('signOut').addEventListener('click', async function () {
       await fetch('/api/logout', { method: 'POST' });
       window.location.href = '/';
     });
+
+    // Second line of defence if the session expires while this page sits open.
+    (async function () {
+      try {
+        var res  = await fetch('/api/auth/status');
+        var data = await res.json();
+        if (!data.authenticated) window.location.href = '/';
+      } catch (e) { /* offline — leave the page alone */ }
+    })();
+  })();
   </script>
 
 </body>
