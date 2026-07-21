@@ -14,7 +14,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
   <style>
     /* Variables copied from public/index.html so the portal matches the rest of
@@ -101,69 +101,30 @@
     }
     .portal-intro p { color: var(--text-muted); font-size: 1rem; }
 
+    /* App-icon tiles. The artwork is Rob's 512x512 PNGs, shown at 260px so they
+       stay under their native resolution and keep a crisp edge on retina. */
     .cards {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 1.5rem;
+      grid-template-columns: repeat(2, 260px);
+      gap: 2rem;
     }
 
     .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 2rem;
-      text-decoration: none;
-      color: inherit;
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+      display: block;
+      line-height: 0;
+      border-radius: 22%;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      box-shadow: 0 4px 14px rgba(0, 24, 3, 0.10);
     }
     .card:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 12px 28px rgba(0, 24, 3, 0.09);
-      border-color: var(--accent);
+      transform: translateY(-4px);
+      box-shadow: 0 14px 32px rgba(0, 24, 3, 0.18);
     }
-    body.dark .card:hover { box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45); }
-
-    .card-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 12px;
-      background: var(--accent-light);
-      color: var(--accent-dark);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.5rem;
-      margin-bottom: 0.25rem;
-    }
-    .card h2 { font-size: 1.25rem; font-weight: 600; color: var(--text-primary); }
-    .card p { color: var(--text-secondary); font-size: 0.9rem; line-height: 1.55; }
-
-    .card-meta {
-      margin-top: auto;
-      padding-top: 1rem;
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-
-    .badge {
-      display: inline-block;
-      background: var(--accent-light);
-      color: var(--accent-dark);
-      font-size: 0.7rem;
-      font-weight: 600;
-      padding: 0.15rem 0.5rem;
-      border-radius: 999px;
-      letter-spacing: 0.02em;
-    }
+    .card:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+    .card img { width: 100%; height: auto; display: block; border-radius: inherit; }
 
     @media (max-width: 720px) {
-      .cards { grid-template-columns: 1fr; }
+      .cards { grid-template-columns: 260px; justify-content: center; }
       .portal { padding: 2rem 1.25rem 3rem; }
       .header { padding: 1rem 1.25rem; }
     }
@@ -187,25 +148,11 @@
     <div class="cards">
 
       <a class="card" href="/uf101">
-        <div class="card-icon">📄</div>
-        <h2>U.F.101 Creator <span class="badge">NEW</span></h2>
-        <p>
-          Build an IAA Form U.F.101 application to fly inside a restricted or
-          prohibited zone. Draw the operating area, detect which UAS geographical
-          zones it intersects, and export the completed form.
-        </p>
-        <div class="card-meta">Form Version 13 &middot; IAA zones 25 May 2026</div>
+        <img src="/icon-uf101-creator.png" alt="U.F.101 Creator" width="512" height="512">
       </a>
 
       <a class="card" href="/">
-        <div class="card-icon">🚁</div>
-        <h2>Flight Plan</h2>
-        <p>
-          The flight planning dashboard — flight plans and evidence, flight logs,
-          drones, batteries, maintenance, training, incidents and SORA
-          documentation.
-        </p>
-        <div class="card-meta">Dashboard, plans and records</div>
+        <img src="/icon-flight-planner.png" alt="Flight Planner" width="512" height="512">
       </a>
 
     </div>
