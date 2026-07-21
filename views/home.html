@@ -14,7 +14,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
     /* Variables copied from public/index.html so the portal matches the rest of
@@ -55,98 +55,87 @@
       color: var(--text-primary);
       min-height: 100vh;
       display: flex;
-      flex-direction: column;
-    }
-
-    .header {
-      background: var(--bg-card);
-      border-bottom: 1px solid var(--border);
-      padding: 1rem 2rem;
-      display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: center;
+      padding: 2rem;
     }
-    .header-logo { height: 44px; width: auto; }
-    .header-actions { display: flex; gap: 1rem; align-items: center; }
-
-    .logout-btn {
-      background: none;
-      border: 1px solid var(--border);
-      color: var(--text-secondary);
-      padding: 0.5rem 1rem;
-      border-radius: 8px;
-      cursor: pointer;
-      font-family: inherit;
-      font-size: 0.875rem;
-    }
-    .logout-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
 
     .portal {
-      flex: 1;
       display: flex;
       flex-direction: column;
-      justify-content: center;
-      max-width: 960px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 3rem 2rem 4rem;
+      align-items: center;
+      text-align: center;
+      /* Nudged up a little: dead-centre reads as slightly low on a tall screen. */
+      margin-top: -4vh;
     }
 
-    .portal-intro { margin-bottom: 2.5rem; }
-    .portal-intro h1 {
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: var(--text-primary);
-      margin-bottom: 0.5rem;
+    .portal-logo {
+      width: min(360px, 70vw);
+      height: auto;
+      display: block;
+      margin-bottom: clamp(2.5rem, 7vh, 4.5rem);
     }
-    .portal-intro p { color: var(--text-muted); font-size: 1rem; }
 
-    /* App-icon tiles. The artwork is Rob's 512x512 PNGs, shown at 260px so they
-       stay under their native resolution and keep a crisp edge on retina. */
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(2, 260px);
-      gap: 2rem;
-    }
+    .cards { display: flex; gap: 1.5rem; }
 
     .card {
       display: block;
       line-height: 0;
+      width: 120px;
       border-radius: 22%;
       transition: transform 0.15s ease, box-shadow 0.15s ease;
-      box-shadow: 0 4px 14px rgba(0, 24, 3, 0.10);
+      box-shadow: 0 3px 10px rgba(0, 24, 3, 0.10);
     }
     .card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 14px 32px rgba(0, 24, 3, 0.18);
+      box-shadow: 0 12px 26px rgba(0, 24, 3, 0.18);
     }
     .card:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
     .card img { width: 100%; height: auto; display: block; border-radius: inherit; }
 
-    @media (max-width: 720px) {
-      .cards { grid-template-columns: 260px; justify-content: center; }
-      .portal { padding: 2rem 1.25rem 3rem; }
-      .header { padding: 1rem 1.25rem; }
+    /* Sign Out lived in the top bar, which is gone — now a power icon in the
+       corner, matching the treatment in the Claude Design concept. */
+    .signout {
+      position: fixed;
+      top: 28px;
+      right: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      background: none;
+      border: none;
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: color .15s ease, background .15s ease;
+    }
+    .signout:hover { background: rgba(0, 24, 3, 0.06); }
+    body.dark .signout:hover { background: rgba(255, 255, 255, 0.08); }
+    .signout:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    @media (max-width: 520px) {
+      .cards { gap: 1.25rem; }
+      .card { width: 104px; }
     }
   </style>
 </head>
 <body>
 
-  <header class="header">
-    <img src="/logo.png" alt="Aerial" class="header-logo">
-    <div class="header-actions">
-      <button class="logout-btn" id="logoutBtn">Sign Out</button>
-    </div>
-  </header>
+  <button class="signout" id="logoutBtn" aria-label="Sign out" title="Sign out">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2v10"></path>
+      <path d="M18.4 6.6a9 9 0 1 1-12.77.04"></path>
+    </svg>
+  </button>
 
   <main class="portal">
-    <div class="portal-intro">
-      <h1>AerialDeck</h1>
-      <p>Flight planning, record keeping and airspace applications.</p>
-    </div>
+
+    <img class="portal-logo" src="/logo.png" alt="AerialDeck">
 
     <div class="cards">
-
       <a class="card" href="/uf101">
         <img src="/icon-uf101-creator.png" alt="U.F.101 Creator" width="512" height="512">
       </a>
@@ -154,8 +143,8 @@
       <a class="card" href="/">
         <img src="/icon-flight-planner.png" alt="Flight Planner" width="512" height="512">
       </a>
-
     </div>
+
   </main>
 
   <script>
