@@ -1860,6 +1860,59 @@ app.get('/uf101/:asset', requirePage, async (req, res) => {
   }
 });
 
+// The zone datasets the Creator can detect against. Unions the two archive
+// locations: geozones/archive/ (fed by the daily IAA checker) and the older
+// uf101/geojson-archive/ (the historical releases saved flights reference).
+// Deduped by version id; newest first. Cheap — lists filenames, downloads
+// nothing. The id encodes the date (20260714V1), so a lexical sort is
+// chronological and the issue date needs no file read.
+app.get('/api/uf101/zone-versions', requirePage, async (req, res) => {
+  try {
+    const seen = new Map();  // id -> storage prefix it lives under
+    for (const prefix of ['geozones/archive', 'uf101/geojson-archive']) {
+      const { data } = await supabase.storage.from('aerialdeck-files').list(prefix, { limit: 200 });
+      for (const f of (data || [])) {
+        const m = f.name.match(/^(\d{8}V\d+)\.geojson$/);
+        if (m && !seen.has(m[1])) seen.set(m[1], prefix);
+      }
+    }
+    const versions = [...seen.keys()].sort().reverse().map(id => {
+      const d = id.slice(0, 8);                       // YYYYMMDD
+      const iso = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+      const variant = id.slice(8);                    // e.g. V1
+      const label = new Date(iso).toLocaleDateString('en-IE', { day: 'numeric', month: 'short', year: 'numeric' });
+      return { id, issued: iso, label: `${label} (${variant})` };
+    });
+    res.set('Cache-Control', 'private, max-age=300');
+    res.json({ versions });
+  } catch (err) {
+    console.error('Error listing zone versions:', err.message);
+    res.status(502).json({ error: 'Could not list zone versions' });
+  }
+});
+
+// Serve any one zone dataset as GeoJSON, from whichever archive holds it.
+// Immutable per id, so the browser may cache it hard.
+app.get('/uf101/zones/:versionId', requirePage, async (req, res) => {
+  if (!/^\d{8}V\d+$/.test(req.params.versionId)) {
+    return res.status(400).send('Bad version id');
+  }
+  const paths = [
+    `geozones/archive/${req.params.versionId}.geojson`,
+    `uf101/geojson-archive/${req.params.versionId}.geojson`
+  ];
+  for (const p of paths) {
+    const { data, error } = await supabase.storage.from('aerialdeck-files').download(p);
+    if (!error && data) {
+      const buf = Buffer.from(await data.arrayBuffer());
+      res.set('Content-Type', 'application/geo+json');
+      res.set('Cache-Control', 'private, max-age=31536000, immutable');
+      return res.send(buf);
+    }
+  }
+  res.status(404).send('Version not found');
+});
+
 // Frozen historical zone releases, linked from each saved flight so the zones
 // that applied when it was drawn can always be retrieved.
 app.get('/uf101/geojson-archive/:file', requirePage, async (req, res) => {

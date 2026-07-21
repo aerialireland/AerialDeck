@@ -16,10 +16,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
-    <!-- AERIALDECK: served from Supabase Storage via server.js rather than sitting
-         in the repo — the dataset is 7.2 MB and grows with every IAA reissue.
-         Upload with scripts/upload-uf101-assets.mjs. -->
-    <script src="/uf101/iaa-zones.js?v=20260525"></script>
+    <!-- AERIALDECK: the zone dataset is no longer loaded by a fixed <script>.
+         It is fetched at runtime from /uf101/zones/<version> so the user can pick
+         which IAA release to detect against (see the Zone dataset selector). The
+         detection code still reads the global IAA_ZONES_DATA; the bootstrap below
+         assigns window.IAA_ZONES_DATA once a version is loaded, and the existing
+         `typeof IAA_ZONES_DATA === 'undefined'` guards hold until it is. -->
+
     <!-- AERIALDECK: Inter, so the top bar matches the Flight Plan section.
          Applied to the header only — the rest of the page keeps its own type. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -293,7 +296,25 @@
         .btn-success { background: var(--accent); color: #fff; font-weight: 600; }
         .btn-success:hover { background: var(--accent-dark); }
         .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
-        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+
+        /* Zone dataset selector in the map panel header. */
+        .zone-version-picker {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            font-size: 0.78rem; color: var(--text-secondary);
+            padding: 0.25rem 0.5rem 0.25rem 0.6rem;
+            border: 1px solid var(--border); border-radius: 6px;
+            background: var(--bg-secondary);
+        }
+        .zone-version-picker > span:first-child { font-weight: 600; }
+        .zone-version-picker select {
+            border: none; background: transparent; font-family: inherit;
+            font-size: 0.78rem; color: var(--text-primary); cursor: pointer;
+            padding: 0.1rem 0.2rem; max-width: 170px;
+        }
+        .zone-version-picker select:focus { outline: none; }
+        .zone-dot { width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; flex: none; }
+        .zone-dot.ready { background: #22c55e; }
 
         /* Do not change the map's size — see the note at the top of this block. */
         #map { flex: 1; min-height: 300px; border-radius: 12px; border: 1px solid var(--border); }
@@ -533,6 +554,16 @@
             const drawnItemsRef = useRef(null);
             const drawControlRef = useRef(null);
             const zonesLayerRef = useRef(null);
+
+            // Which IAA zone dataset detection runs against. The list comes from
+            // the archive; newest is the default. Switching reloads the data and
+            // re-detects if a shape is already drawn.
+            const [zoneVersions, setZoneVersions] = useState([]);
+            const [zoneVersionId, setZoneVersionId] = useState('');
+            const [zonesReady, setZonesReady] = useState(false);
+            // Latest drawn geometry, kept in a ref so a version switch can
+            // re-detect without threading state through the map handlers.
+            const drawnRef = useRef({ layer: null, type: null });
 
             // Form State
             const [formData, setFormData] = useState({
@@ -787,6 +818,9 @@
                             updateForm('circleRadius', '');
                         }
 
+                        // Remember the shape so a zone-version switch can re-detect it.
+                        drawnRef.current = { layer, type: e.layerType };
+
                         // Detect intersecting zones and calculate terrain
                         detectIntersectingZones(layer, e.layerType);
                         calculateAMSL(layer, e.layerType);
@@ -1011,6 +1045,56 @@
                 }
             };
 
+            // Fetch a zone dataset and make it the one detection runs against.
+            // Assigns window.IAA_ZONES_DATA (the global the detection code reads),
+            // drops any drawn zones overlay so it redraws from the new data, and
+            // re-detects the current shape when dates allow.
+            const loadZoneVersion = async (id) => {
+                if (!id) return;
+                try {
+                    setZonesReady(false);
+                    const res = await fetch('/uf101/zones/' + id);
+                    if (!res.ok) throw new Error('zones ' + res.status);
+                    window.IAA_ZONES_DATA = await res.json();
+                    setZoneVersionId(id);
+                    setZonesReady(true);
+
+                    // Force the yellow zones overlay to rebuild from the new data
+                    // next time it is toggled on.
+                    if (zonesLayerRef.current && mapInstanceRef.current) {
+                        mapInstanceRef.current.removeLayer(zonesLayerRef.current);
+                    }
+                    zonesLayerRef.current = null;
+
+                    // Re-run detection against the new dataset if a shape is drawn
+                    // and dates are set (detectIntersectingZones bails otherwise).
+                    const d = drawnRef.current;
+                    const fd = formDataRef.current || {};
+                    if (d.layer && fd.startDateTime && fd.endDateTime) {
+                        detectIntersectingZones(d.layer, d.type);
+                    }
+                } catch (err) {
+                    console.error('Could not load zone version', id, err);
+                    setZonesReady(false);
+                    showToast('Could not load that zone dataset');
+                }
+            };
+
+            // On mount: get the version list and load the newest.
+            useEffect(() => {
+                (async () => {
+                    try {
+                        const res = await fetch('/api/uf101/zone-versions');
+                        const { versions } = await res.json();
+                        setZoneVersions(versions || []);
+                        if (versions && versions.length) await loadZoneVersion(versions[0].id);
+                    } catch (err) {
+                        console.error('Could not list zone versions', err);
+                        showToast('Could not load zone datasets');
+                    }
+                })();
+            }, []);
+
             const updateDrawControl = (type) => {
                 if (!mapInstanceRef.current) return;
                 if (drawControlRef.current) {
@@ -1072,6 +1156,7 @@
                 if (drawnItemsRef.current) {
                     drawnItemsRef.current.clearLayers();
                 }
+                drawnRef.current = { layer: null, type: null };
                 setDrawnLayer(null);
                 setCoordinates([]);
                 setCircleData(null);
@@ -1277,6 +1362,23 @@
                 const fl = savedFlightsRef.current.find(f => f.id === id);
                 if (!fl) { showToast('Flight not found'); return; }
                 setFormData(fl.formData); setSelectedPilots(fl.selectedPilots || ['tk', 'roc']); setShapeType(fl.shapeType || 'polygon'); setCurrentFlightId(fl.id);
+
+                // Point the dataset selector at the release this flight was
+                // validated against, when it is one we still hold — so if the
+                // user re-draws, detection uses the same dataset the audit trail
+                // records. The zones themselves are NOT re-detected on load
+                // (Invariant 1); the stored zoneName stands.
+                // Two name shapes appear in the data: the compact
+                // "...Ireland 20251129V2" and the newer "20260714_..._V1".
+                const nm = (fl.geojsonVersion && fl.geojsonVersion.name) || '';
+                let vid = null;
+                const compact = nm.match(/(\d{8}V\d+)/i);
+                const underscored = nm.match(/(\d{8})_.*?_v(\d+)/i);
+                if (compact) vid = compact[1].toUpperCase();
+                else if (underscored) vid = underscored[1] + 'V' + underscored[2];
+                if (vid && zoneVersions.some(v => v.id === vid) && vid !== zoneVersionId) {
+                    loadZoneVersion(vid);
+                }
                 // Delay drawing to ensure map is ready after potential remount
                 setTimeout(() => {
                     if (drawnItemsRef.current) drawnItemsRef.current.clearLayers();
@@ -1284,6 +1386,7 @@
                     if (fl.circle && mapInstanceRef.current && drawnItemsRef.current) {
                         const circ = L.circle([fl.circle.lat, fl.circle.lng], {radius: fl.circle.r, color: '#0c3210', fillColor: '#98d59f', fillOpacity: 0.3});
                         drawnItemsRef.current.addLayer(circ); setDrawnLayer(circ);
+                        drawnRef.current = { layer: circ, type: 'circle' };
                         setCircleData({center: L.latLng(fl.circle.lat, fl.circle.lng), radius: fl.circle.r}); setCoordinates([]);
                         mapInstanceRef.current.fitBounds(circ.getBounds(), {padding: [50, 50]});
                         // Don't recalculate zones - use stored zone data from when flight was saved
@@ -1293,6 +1396,7 @@
                         const ll = fl.coords.map(x => L.latLng(x.lat, x.lng));
                         const poly = L.polygon(ll, {color: '#0c3210', fillColor: '#98d59f', fillOpacity: 0.3});
                         drawnItemsRef.current.addLayer(poly); setDrawnLayer(poly); setCoordinates(ll); setCircleData(null);
+                        drawnRef.current = { layer: poly, type: 'polygon' };
                         mapInstanceRef.current.fitBounds(poly.getBounds(), {padding: [50, 50]});
                         // Don't recalculate zones - use stored zone data from when flight was saved
                         calculateAMSL(poly, 'polygon');
@@ -2105,6 +2209,20 @@
                             <div className="panel-header">
                                 <span>Flight Area Map</span>
                                 <div className="btn-group">
+                                    <label className="zone-version-picker" title="Which IAA zone dataset to detect against">
+                                        <span>Zones</span>
+                                        <select value={zoneVersionId}
+                                                onChange={(e) => loadZoneVersion(e.target.value)}
+                                                disabled={!zoneVersions.length}>
+                                            {zoneVersions.map((v, i) => (
+                                                <option key={v.id} value={v.id}>
+                                                    {v.label}{i === 0 ? ' — latest' : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <span className={'zone-dot' + (zonesReady ? ' ready' : '')}
+                                              title={zonesReady ? 'Dataset loaded' : 'Loading…'}></span>
+                                    </label>
                                     <button className="btn btn-secondary btn-sm" onClick={() => mapInstanceRef.current?.setView([53.3498, -6.2603], 12)}>Dublin</button>
                                     <button className="btn btn-secondary btn-sm" onClick={() => mapInstanceRef.current?.setView([53.4264, -6.2499], 13)}>DUB Airport</button>
                                     <button className="btn btn-secondary btn-sm" onClick={() => mapInstanceRef.current?.setView([51.8985, -8.4756], 12)}>Cork</button>
