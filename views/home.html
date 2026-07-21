@@ -76,7 +76,7 @@
       margin-bottom: clamp(2.5rem, 7vh, 4.5rem);
     }
 
-    .cards { display: flex; gap: 1.5rem; }
+    .cards { display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap; }
 
     .card {
       display: block;
@@ -92,6 +92,17 @@
     }
     .card:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
     .card img { width: 100%; height: auto; display: block; border-radius: inherit; }
+
+    /* External links — a size down from the two AerialDeck sections above, so the
+       difference between "our tools" and "useful sites" reads at a glance. */
+    .links {
+      margin-top: clamp(1.75rem, 4.5vh, 2.75rem);
+      padding-top: clamp(1.75rem, 4.5vh, 2.75rem);
+      border-top: 1px solid var(--border);
+      width: 100%;
+    }
+    .links .card { width: 84px; border-radius: 24%; }
+    .links .cards { gap: 1.1rem; }
 
     /* Sign Out lived in the top bar, which is gone — now a power icon in the
        corner, matching the treatment in the Claude Design concept. */
@@ -143,6 +154,35 @@
       <a class="card" href="/">
         <img src="/icon-flight-planner.png" alt="Flight Planner" width="512" height="512">
       </a>
+    </div>
+
+    <!-- External sites. All open in a new tab so the portal stays put.
+         rel="noopener" is required with target="_blank": without it the opened
+         page gets a handle on this one via window.opener. -->
+    <div class="links">
+      <div class="cards">
+
+        <a class="card" href="https://www.iaa.ie/general-aviation/drones/uas-geographic-zones"
+           target="_blank" rel="noopener noreferrer" title="IAA UAS Geographic Zones">
+          <img src="/tool-icons/iaa-geozones.png" alt="IAA Geozones" width="512" height="512">
+        </a>
+
+        <a class="card" href="https://www.iaa.ie/general-aviation/drones/operational-authorisation"
+           target="_blank" rel="noopener noreferrer" title="IAA Operational Authorisation holders">
+          <img src="/tool-icons/iaa-oa-holders.png" alt="IAA OA Holders" width="512" height="512">
+        </a>
+
+        <a class="card" href="https://aviationreporting.eu/en"
+           target="_blank" rel="noopener noreferrer" title="ECCAIRS 2 — occurrence reporting">
+          <img src="/tool-icons/eccairs-reports.png" alt="ECCAIRS Reports" width="512" height="512">
+        </a>
+
+        <a class="card" href="https://www.aerial.ie/"
+           target="_blank" rel="noopener noreferrer" title="Aerial website">
+          <img src="/tool-icons/aerial-website.png" alt="Aerial Website" width="512" height="512">
+        </a>
+
+      </div>
     </div>
 
   </main>
