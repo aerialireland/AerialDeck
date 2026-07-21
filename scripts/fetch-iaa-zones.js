@@ -15,7 +15,7 @@
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
-const { checkAndArchive } = require('../lib/iaa-zones.js');
+const { checkAndArchive, syncToDrive } = require('../lib/iaa-zones.js');
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -79,6 +79,12 @@ const log = (m) => console.log(stamp(), m);
         // Non-fatal: the Supabase archive is the system of record.
         console.error(stamp(), 'Drive copy failed:', err.message);
       }
+    }
+
+    if (!dryRun) {
+      const d = await syncToDrive(log);
+      if (!d.configured) log('Drive: not configured (GOOGLE_SERVICE_ACCOUNT_JSON / GDRIVE_FOLDER_ID unset) — skipped');
+      else log(`Drive: ${d.uploaded} uploaded, ${d.skipped} already there, ${d.failed} failed`);
     }
 
     log(`done — ${result.action}${result.versionId ? ' (' + result.versionId + ', ' + result.features + ' zones)' : ''}`);

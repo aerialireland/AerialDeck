@@ -1743,13 +1743,28 @@ app.get('/api/cron/check-iaa-zones', async (req, res) => {
 
   const lines = [];
   try {
-    const { checkAndArchive } = require('./lib/iaa-zones.js');
-    const result = await checkAndArchive({ onLog: (m) => { lines.push(m); console.log('[iaa-zones]', m); } });
+    const { checkAndArchive, syncToDrive } = require('./lib/iaa-zones.js');
+    const say = (m) => { lines.push(m); console.log('[iaa-zones]', m); };
+
+    const result = await checkAndArchive({ onLog: say });
     if (!result.ok) {
       console.error('[iaa-zones] failed:', result.message);
       return res.status(502).json({ ok: false, error: result.message, log: lines });
     }
-    res.json({ ok: true, action: result.action, versionId: result.versionId, features: result.features, log: lines });
+
+    // Mirror to Google Drive. Deliberately after the archive and never fatal —
+    // Supabase is the system of record and a Drive problem must not fail the
+    // daily check.
+    const driveResult = await syncToDrive(say);
+
+    res.json({
+      ok: true,
+      action: result.action,
+      versionId: result.versionId,
+      features: result.features,
+      drive: driveResult,
+      log: lines
+    });
   } catch (err) {
     console.error('[iaa-zones] threw:', err);
     res.status(500).json({ ok: false, error: err.message, log: lines });
