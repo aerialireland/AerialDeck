@@ -1726,6 +1726,36 @@ app.delete('/api/sora-documents/:fileId', requireAuth, async (req, res) => {
   }
 });
 
+// ============ SCHEDULED JOBS ============
+// Daily check for a new IAA zone release, triggered by Vercel Cron (see the
+// crons entry in vercel.json). Runs server-side so it does not depend on any
+// machine being switched on.
+//
+// Not behind requireAuth — cron has no session. Vercel sends
+// 'Authorization: Bearer <CRON_SECRET>' when CRON_SECRET is set in the project
+// env; set it, or this endpoint is open to anyone who knows the path.
+app.get('/api/cron/check-iaa-zones', async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  if (secret && req.get('authorization') !== `Bearer ${secret}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if (!secret) console.warn('CRON_SECRET is not set — /api/cron/check-iaa-zones is unprotected');
+
+  const lines = [];
+  try {
+    const { checkAndArchive } = require('./lib/iaa-zones.js');
+    const result = await checkAndArchive({ onLog: (m) => { lines.push(m); console.log('[iaa-zones]', m); } });
+    if (!result.ok) {
+      console.error('[iaa-zones] failed:', result.message);
+      return res.status(502).json({ ok: false, error: result.message, log: lines });
+    }
+    res.json({ ok: true, action: result.action, versionId: result.versionId, features: result.features, log: lines });
+  } catch (err) {
+    console.error('[iaa-zones] threw:', err);
+    res.status(500).json({ ok: false, error: err.message, log: lines });
+  }
+});
+
 // ============ PORTAL PAGES ============
 // Pages under views/ are served from here rather than from public/, because
 // express.static exposes everything in public/ without checking the session.
