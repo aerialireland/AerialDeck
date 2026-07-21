@@ -1742,8 +1742,11 @@ app.get('/uf101', requirePage, sendView('uf101-creator.html'));
 // because the IAA zone dataset is 7.2 MB and the archive another 28 MB.
 // Uploaded by scripts/upload-uf101-assets.mjs.
 const UF101_ASSETS = {
-  'iaa-zones.js': { path: 'uf101/iaa-zones.js', type: 'application/javascript' },
-  'flights-data.json': { path: 'uf101/flights-data.json', type: 'application/json' }
+  // maxAge in seconds. The zone dataset is immutable for a given ?v= so it can
+  // sit in the browser cache; the flight list changes whenever someone saves in
+  // the live console, so it must not.
+  'iaa-zones.js': { path: 'uf101/iaa-zones.js', type: 'application/javascript', maxAge: 3600 },
+  'flights-data.json': { path: 'uf101/flights-data.json', type: 'application/json', maxAge: 0 }
 };
 
 app.get('/uf101/:asset', requirePage, async (req, res) => {
@@ -1754,9 +1757,9 @@ app.get('/uf101/:asset', requirePage, async (req, res) => {
     if (error) throw error;
     const buf = Buffer.from(await data.arrayBuffer());
     res.set('Content-Type', asset.type);
-    // The zone dataset is immutable for a given ?v=, so let the browser keep it.
-    // flights-data.json is already cache-busted by the caller with a timestamp.
-    res.set('Cache-Control', 'private, max-age=3600');
+    res.set('Cache-Control', asset.maxAge > 0
+      ? `private, max-age=${asset.maxAge}`
+      : 'no-store');
     res.send(buf);
   } catch (err) {
     console.error(`Error serving UF101 asset ${req.params.asset}:`, err.message);
