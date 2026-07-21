@@ -179,7 +179,10 @@ app.use('/video', (req, res, next) => {
   next();
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+// index:false so a request for '/' is NOT auto-served public/index.html here.
+// It has to reach the '/' route below, which checks the session first — without
+// this, Flight Plan is served to anyone before the redirect to /login can run.
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 // Trust proxy for Vercel
 app.set('trust proxy', 1);
 
@@ -1729,7 +1732,8 @@ app.delete('/api/sora-documents/:fileId', requireAuth, async (req, res) => {
 // Anyone hitting these without a session is bounced to the login page at '/'.
 const requirePage = (req, res, next) => {
   if (req.session.authenticated) return next();
-  res.redirect('/');
+  // Carry where they were headed so they land there after signing in.
+  res.redirect('/login?next=' + encodeURIComponent(req.originalUrl));
 };
 
 const sendView = (name) => (req, res) => {
@@ -1739,7 +1743,21 @@ const sendView = (name) => (req, res) => {
 // The AerialDeck portal — the front page linking to each section.
 // Note '/' is deliberately left alone: it still serves the Flight Plan section
 // exactly as before, so existing bookmarks keep working.
+// Sign-in is its own page rather than a panel inside index.html. Public by
+// necessity — it is the thing you reach before you have a session.
+app.get('/login', (req, res) => {
+  if (req.session.authenticated) return res.redirect('/home');
+  sendView('login.html')(req, res);
+});
+
 app.get('/home', requirePage, sendView('home.html'));
+
+// Flight Plan. public/index.html still carries its own login panel, which is now
+// unreachable — the redirect happens before it ever renders. Left in place as a
+// fallback rather than cut out, to keep this file untouched.
+app.get('/', requirePage, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // ============ U.F.101 CREATOR ============
 // A copy of uf101-creator.html from the UF101-Console repo. The live console at

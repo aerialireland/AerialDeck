@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>Sign in · AerialDeck</title>
+
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <meta name="theme-color" content="#97D49F">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-primary: #ffffff;
+      --text-primary: #001803;
+      --text-muted: #6b8a6e;
+      --accent: #6ba671;
+      --accent-dark: #4a8550;
+      --border: #e0e8e0;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      /* Shows until the video paints, and stands in if it never does. */
+      background: linear-gradient(135deg, #001803 0%, #0a2f0a 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    /* Same treatment as the portal at /home. */
+    .bg-video {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: -2;
+      transform: scale(1.01);
+    }
+    .bg-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: -1;
+      pointer-events: none;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .bg-video { display: none; }
+      .bg-overlay {
+        background:
+          linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)),
+          url('/video/wicklow-poster.jpg') center / cover no-repeat;
+      }
+    }
+
+    .login-box {
+      background: var(--bg-primary);
+      padding: 2.5rem;
+      border-radius: 16px;
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.35);
+      width: 100%;
+      max-width: 400px;
+      position: relative;
+      z-index: 1;
+    }
+    .login-box img { height: 40px; margin-bottom: 0.5rem; }
+    .login-box p { color: var(--text-muted); margin-bottom: 1.5rem; }
+
+    .login-box input {
+      width: 100%;
+      padding: 0.875rem 1rem;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      font-size: 1rem;
+      font-family: inherit;
+      color: var(--text-primary);
+      margin-bottom: 1rem;
+    }
+    .login-box input:focus { outline: none; border-color: var(--accent); }
+
+    .login-box button {
+      width: 100%;
+      padding: 0.875rem;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .login-box button:hover { background: var(--accent-dark); }
+    .login-box button:disabled { opacity: 0.6; cursor: default; }
+
+    .login-error {
+      display: none;
+      background: #fee2e2;
+      color: #991b1b;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- WebM first: a Chromium build without the proprietary H.264 decoder stalls
+       on the MP4 silently rather than falling through to it. -->
+  <video class="bg-video" id="bgVideo" autoplay muted loop playsinline
+         preload="auto" poster="/video/wicklow-poster.jpg" aria-hidden="true" tabindex="-1">
+    <source src="/video/wicklow.webm" type="video/webm">
+    <source src="/video/wicklow.mp4" type="video/mp4">
+  </video>
+  <div class="bg-overlay"></div>
+
+  <main class="login-box">
+    <img src="/logo.png" alt="AerialDeck">
+    <p>Enter your password to access flight data</p>
+
+    <div class="login-error" id="loginError">Invalid password. Please try again.</div>
+
+    <form id="loginForm">
+      <input type="password" id="password" placeholder="Enter password"
+             autocomplete="current-password" required autofocus>
+      <button type="submit" id="submitBtn">Sign In</button>
+    </form>
+  </main>
+
+  <script>
+    var form   = document.getElementById('loginForm');
+    var errBox = document.getElementById('loginError');
+    var btn    = document.getElementById('submitBtn');
+
+    // Where to go after signing in. Preserved through ?next= so a deep link to
+    // /uf101 lands back there rather than dumping you on the portal.
+    function destination() {
+      var next = new URLSearchParams(location.search).get('next');
+      // Only same-site paths — never an absolute URL from the query string, or
+      // this becomes an open redirect.
+      if (next && /^\/[^/\\]/.test(next)) return next;
+      return '/home';
+    }
+
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      btn.disabled = true;
+      errBox.style.display = 'none';
+      try {
+        var res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: document.getElementById('password').value })
+        });
+        if (res.ok) {
+          window.location.href = destination();
+          return;
+        }
+        errBox.textContent = 'Invalid password. Please try again.';
+        errBox.style.display = 'block';
+      } catch (err) {
+        errBox.textContent = 'Connection error. Please try again.';
+        errBox.style.display = 'block';
+      }
+      btn.disabled = false;
+      document.getElementById('password').select();
+    });
+
+    (function backgroundVideo() {
+      var v = document.getElementById('bgVideo');
+      if (!v) return;
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        v.removeAttribute('autoplay');
+        v.pause();
+        while (v.firstChild) v.removeChild(v.firstChild);
+        v.load();
+        return;
+      }
+      var p = v.play();
+      if (p && p.catch) {
+        p.catch(function () {
+          document.addEventListener('pointerdown', function retry() {
+            v.play().catch(function () {});
+          }, { once: true });
+        });
+      }
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) v.pause(); else v.play().catch(function () {});
+      });
+    })();
+  </script>
+
+</body>
+</html>
