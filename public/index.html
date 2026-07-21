@@ -196,6 +196,9 @@
     }
     .header h1 { font-size: 1.25rem; color: var(--accent); font-weight: 700; }
     .header-logo { height: 44px; width: auto; }
+    /* Logo links back to the AerialDeck portal. display:flex so the anchor hugs
+       the image instead of leaving inline descender space under it. */
+    .header-home-link { display: flex; align-items: center; }
     .backup-status {
       display: flex; align-items: center; gap: 0.4rem;
       font-size: 0.78rem; color: var(--text-secondary);
@@ -1357,7 +1360,7 @@
   <div class="dashboard" id="dashboard">
     <div class="demo-banner" id="demoBanner" style="display:none;">Demo Mode - Showing sample data while Dronedeck API is unavailable</div>
     <header class="header">
-      <img src="/logo.png" alt="Aerial" class="header-logo">
+      <a href="/home" class="header-home-link" title="Back to AerialDeck"><img src="/logo.png" alt="Aerial" class="header-logo"></a>
       <div class="header-actions">
         <div class="backup-status" id="backupStatus" title="Last full backup (database + storage files)">
           <span class="backup-dot" id="backupDot"></span>

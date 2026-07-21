@@ -52,6 +52,7 @@
         }
         .header-left { display: flex; align-items: center; gap: 1rem; }
         .header-logo { height: 44px; width: auto; }
+        .header-home-link { display: flex; align-items: center; }
         .header-section {
             font-size: 0.95rem;
             font-weight: 600;
@@ -1484,7 +1485,7 @@
                         only exists in the UF101-Console folder, so it 404'd here. */}
                     <header className="header">
                         <div className="header-left">
-                            <a href="/home"><img src="/logo.png" alt="Aerial" className="header-logo" /></a>
+                            <a href="/home" className="header-home-link" title="Back to AerialDeck"><img src="/logo.png" alt="Aerial" className="header-logo" /></a>
                             <span className="header-section">U.F.101 Creator</span>
                         </div>
                         <div className="header-actions">
