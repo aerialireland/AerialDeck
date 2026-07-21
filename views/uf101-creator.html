@@ -20,6 +20,14 @@
          in the repo — the dataset is 7.2 MB and grows with every IAA reissue.
          Upload with scripts/upload-uf101-assets.mjs. -->
     <script src="/uf101/iaa-zones.js?v=20260525"></script>
+    <!-- AERIALDECK: Inter, so the top bar matches the Flight Plan section.
+         Applied to the header only — the rest of the page keeps its own type. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -28,16 +36,50 @@
             color: #1a202c;
         }
         .app-wrapper { display: flex; flex-direction: column; min-height: 100vh; }
+        /* AERIALDECK: top bar matched to the Flight Plan section. Values copied
+           from public/index.html so the two sections line up exactly. */
         .header {
-            background: transparent;
-            color: #1a202c;
-            padding: 32px 5%;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #ffffff;
+            padding: 0.75rem calc((100% - 1600px) / 2 + 1.5rem);
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 20px;
+            border-bottom: 1px solid #e0e8e0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
         }
-        .header-text h1 { font-size: 28px; font-weight: 600; }
-        .header-text p { opacity: 0.6; font-size: 16px; }
+        .header-left { display: flex; align-items: center; gap: 1rem; }
+        .header-logo { height: 44px; width: auto; }
+        .header-section {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #3d5a40;
+            padding-left: 1rem;
+            border-left: 1px solid #e0e8e0;
+        }
+        .header-actions { display: flex; gap: 1rem; align-items: center; }
+        .header-link, .logout-btn {
+            background: #f8faf8;
+            border: 1px solid #e0e8e0;
+            color: #3d5a40;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-family: inherit;
+            text-decoration: none;
+            line-height: 1.4;
+        }
+        .header-link:hover, .logout-btn:hover { background: #e8f5e9; color: #001803; }
+        .read-only-pill {
+            display: flex; align-items: center; gap: 0.4rem;
+            font-size: 0.78rem; color: #3d5a40;
+            padding: 0.35rem 0.6rem; border: 1px solid #e0e8e0;
+            border-radius: 999px; white-space: nowrap; cursor: default;
+        }
+        .read-only-dot { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; flex: none; }
         .main-layout { display: grid; grid-template-columns: 25fr 26fr 39fr; gap: 16px; padding: 16px 5% 60px 5%; flex: 1; }
         @media (max-width: 1200px) { .main-layout { grid-template-columns: 25fr 65fr; } }
         @media (max-width: 900px) { .main-layout { grid-template-columns: 1fr; } .sidebar { display: none; } }
@@ -1437,12 +1479,24 @@
 
             return (
                 <div className="app-wrapper">
-                    {/* Header - spans full width */}
+                    {/* AERIALDECK: top bar matched to the Flight Plan section.
+                        The old header pointed at Aerial25-Green-Small.png, which
+                        only exists in the UF101-Console folder, so it 404'd here. */}
                     <header className="header">
-                        <img src="Aerial25-Green-Small.png" alt="Aerial Logo" style={{height: '62px'}} />
-                        <div className="header-text">
-                            <h1>U.F.101 Creator</h1>
-                            <p>Green Graph Adore Ltd • UAS Flight Application Generator</p>
+                        <div className="header-left">
+                            <a href="/home"><img src="/logo.png" alt="Aerial" className="header-logo" /></a>
+                            <span className="header-section">U.F.101 Creator</span>
+                        </div>
+                        <div className="header-actions">
+                            <div className="read-only-pill" title="Saving happens in the live console at uf101.aerial.ie. This copy is read-only so the two cannot overwrite each other.">
+                                <span className="read-only-dot"></span>
+                                <span>Read-only</span>
+                            </div>
+                            <a className="header-link" href="/home">AerialDeck</a>
+                            <button className="logout-btn" onClick={async () => {
+                                await fetch('/api/logout', { method: 'POST' });
+                                window.location.href = '/';
+                            }}>Sign Out</button>
                         </div>
                     </header>
 
