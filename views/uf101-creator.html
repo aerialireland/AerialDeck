@@ -546,6 +546,11 @@
             // Guards the Convert to Flight Plan button against a double-click
             // creating two plans.
             const [converting, setConverting] = useState(false);
+            // This copy is read-only (the live console at uf101.aerial.ie is the
+            // writer). "New" opens an in-memory draft you can build and Convert to
+            // a Flight Plan — it is NOT saved as a U.F.101 record here. draftMode
+            // lets the editor show without a saved flight behind it.
+            const [draftMode, setDraftMode] = useState(false);
             const [drawnLayer, setDrawnLayer] = useState(null);
             const [coordinates, setCoordinates] = useState([]);
             const [circleData, setCircleData] = useState(null);
@@ -1361,6 +1366,7 @@
             const loadFlight = (id) => {
                 const fl = savedFlightsRef.current.find(f => f.id === id);
                 if (!fl) { showToast('Flight not found'); return; }
+                setDraftMode(false);
                 setFormData(fl.formData); setSelectedPilots(fl.selectedPilots || ['tk', 'roc']); setShapeType(fl.shapeType || 'polygon'); setCurrentFlightId(fl.id);
 
                 // Point the dataset selector at the release this flight was
@@ -1409,6 +1415,15 @@
             const startRename = (id) => { const fl = savedFlights.find(f => f.id === id); if (fl) { setRenameFlightId(id); setRenameName(fl.name); setShowRenameModal(true); } };
             const confirmRename = () => { if (!renameFlightId) return; const newName = renameName.trim() || 'Unnamed Flight'; const upd = savedFlights.map(f => f.id === renameFlightId ? {...f, name: newName} : f); setSavedFlights(upd); saveFlightsToServer(upd); setShowRenameModal(false); setRenameFlightId(null); setRenameName(''); showToast('Renamed to: ' + newName); };
             const newFlight = () => { setCurrentFlightId(null); setFormData({operatorName: COMPANY.operatorName, registrationNumber: COMPANY.registrationNumber, authNumber: COMPANY.authNumber, sailLevel: 'SORA - SAIL II', vlosBvlos: 'VLOS', uasModel: 'DJI Mavic 3 Pro', pilotNames: "Tony Kinlan & Rob O'Connor", phonePrimary: '0861649569', phoneAlternate: '0877582972', zoneId: '', zoneName: '', detectedZones: '', areaDescription: '', maxAltitude: '', maxHeight: '400ft', startDateTime: '', endDateTime: '', proposedDateTime: '', duration: '', circleCenter: '', circleRadius: '', polygonCoords: ''}); setSelectedPilots(['tk', 'roc']); clearDrawing(); showToast('New flight'); };
+
+            // Start a fresh in-memory draft for the Convert-to-Flight-Plan flow.
+            // Does NOT add anything to the saved list — nothing here persists as a
+            // U.F.101 record (see draftMode).
+            const startDraft = () => {
+                newFlight();
+                setDraftMode(true);
+                showToast('New draft — build it, then Convert to Flight Plan');
+            };
 
             // Capture map screenshot
             const captureMapScreenshot = async () => {
@@ -1950,15 +1965,19 @@
                                         onChange={(e) => setFlightSearch(e.target.value)}
                                         className="sidebar-search"
                                     />
-                                    <button className="btn btn-sm" onClick={() => { setSaveName(''); setShowSaveModal(true); }} style={{background: 'var(--accent)', color: '#fff'}}>+ New</button>
+                                    <button className="btn btn-sm" onClick={startDraft} style={{background: 'var(--accent)', color: '#fff'}}>+ New</button>
                                 </div>
+                            </div>
+                            <div style={{fontSize: '0.7rem', color: 'var(--text-muted)', margin: '0 0 0.6rem', lineHeight: 1.4}}>
+                                Applications are read-only here, from the live console. Save new ones at{' '}
+                                <a href="https://uf101.aerial.ie" target="_blank" rel="noopener noreferrer" style={{color: 'var(--accent-dark)'}}>uf101.aerial.ie</a>.
                             </div>
                             <div className="sidebar-flights">
                                 {savedFlights.length === 0 ? (
                                     <div className="sidebar-empty">
                                         <div style={{fontSize: '32px', marginBottom: '12px'}}>📋</div>
-                                        <div>No saved flights</div>
-                                        <div style={{marginTop: '8px', fontSize: '12px'}}>Click + New to create one</div>
+                                        <div>No applications loaded</div>
+                                        <div style={{marginTop: '8px', fontSize: '12px'}}>Click + New to start a draft to convert</div>
                                     </div>
                                 ) : (
                                     savedFlights.filter(flight =>
@@ -1979,11 +1998,6 @@
                                                     </a>
                                                 </div>
                                             )}
-                                            <div className="sidebar-flight-actions">
-                                                <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); startRename(flight.id); }} style={{background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', padding: '0.2rem 0.5rem', fontSize: '0.7rem'}}>Rename</button>
-                                                <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); duplicateFlight(flight.id); }} style={{background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', padding: '0.2rem 0.5rem', fontSize: '0.7rem'}}>Duplicate</button>
-                                                <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); deleteFlight(flight.id); }} style={{background: 'var(--bg-secondary)', color: '#dc2626', border: '1px solid var(--border)', padding: '0.2rem 0.5rem', fontSize: '0.7rem'}}>Delete</button>
-                                            </div>
                                         </div>
                                     ))
                                 )}
@@ -1998,13 +2012,13 @@
                         </div>
 
                         {/* Content Area */}
-                        {!currentFlightId ? (
+                        {!currentFlightId && !draftMode ? (
                             /* Welcome Screen */
                             <div className="welcome-screen">
                                 <h2 style={{fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '0.5rem'}}>Welcome</h2>
-                                <p style={{color: 'var(--text-muted)', marginBottom: '2rem'}}>Create a new flight application or select one from the sidebar</p>
-                                <button className="btn btn-primary" onClick={() => { setSaveName(''); setShowSaveModal(true); }} style={{padding: '0.85rem 1.75rem', fontSize: '1rem'}}>
-                                    + New Flight Application
+                                <p style={{color: 'var(--text-muted)', marginBottom: '2rem'}}>Select an application from the sidebar to view it, or start a draft to convert into a Flight Plan.</p>
+                                <button className="btn btn-primary" onClick={startDraft} style={{padding: '0.85rem 1.75rem', fontSize: '1rem'}}>
+                                    + New Draft
                                 </button>
                             </div>
                         ) : (
@@ -2013,8 +2027,10 @@
                         {/* Left Panel - Form */}
                         <div className="panel">
                             <div className="panel-header">
-                                <span>Application Details</span>
-                                <button className="btn btn-sm btn-success" onClick={saveFlight}>💾 Save</button>
+                                <span>{draftMode ? 'Application Details — draft' : 'Application Details'}</span>
+                                <span style={{fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 400}}>
+                                    {draftMode ? 'Not saved here · use Convert to Flight Plan' : 'Read-only'}
+                                </span>
                             </div>
                             <div className="tabs">
                                 <div className={"tab" + (activeTab === 'operator' ? ' active' : '')} onClick={() => setActiveTab('operator')}>Operator</div>
