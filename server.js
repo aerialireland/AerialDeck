@@ -1860,6 +1860,74 @@ app.get('/uf101/:asset', requirePage, async (req, res) => {
   }
 });
 
+// ============ U.F.101 FLIGHTS (per-record store) ============
+// Replaces the flat flights-data.json: each application is its own row, so two
+// people saving at once no longer overwrite each other's work. The whole record
+// lives in `data` (jsonb); id/name/saved_at are mirrored for ordering.
+// requireAuth (401 JSON) since these are fetched by the Creator page.
+
+app.get('/api/uf101/flights', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('uf101_flights')
+      .select('data')
+      .order('saved_at', { ascending: false });
+    if (error) throw error;
+    // Return the array of records in the exact shape the Creator expects.
+    res.json((data || []).map(r => r.data));
+  } catch (err) {
+    console.error('Error listing UF101 flights:', err.message);
+    res.status(500).json({ error: 'Failed to list flights' });
+  }
+});
+
+// Upsert one record — used for both create and update, keyed on the record id.
+async function upsertUf101Flight(record) {
+  if (!record || record.id == null) throw new Error('record needs an id');
+  const row = {
+    id: String(record.id),
+    name: record.name || 'Unnamed Flight',
+    saved_at: record.savedAt || new Date().toISOString(),
+    data: record,
+    updated_at: new Date().toISOString()
+  };
+  const { error } = await supabase.from('uf101_flights').upsert(row, { onConflict: 'id' });
+  if (error) throw error;
+  return row;
+}
+
+app.post('/api/uf101/flights', requireAuth, async (req, res) => {
+  try {
+    await upsertUf101Flight(req.body);
+    res.json({ success: true, id: String(req.body.id) });
+  } catch (err) {
+    console.error('Error saving UF101 flight:', err.message);
+    res.status(500).json({ error: 'Failed to save flight' });
+  }
+});
+
+app.put('/api/uf101/flights/:id', requireAuth, async (req, res) => {
+  try {
+    // Trust the path id over the body, so a record can't be re-homed by accident.
+    await upsertUf101Flight({ ...req.body, id: req.params.id });
+    res.json({ success: true, id: req.params.id });
+  } catch (err) {
+    console.error('Error updating UF101 flight:', err.message);
+    res.status(500).json({ error: 'Failed to update flight' });
+  }
+});
+
+app.delete('/api/uf101/flights/:id', requireAuth, async (req, res) => {
+  try {
+    const { error } = await supabase.from('uf101_flights').delete().eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting UF101 flight:', err.message);
+    res.status(500).json({ error: 'Failed to delete flight' });
+  }
+});
+
 // The archived IAA zone datasets, shared by both sections — the U.F.101 Creator
 // and the Flight Planner's Airspace Zones detector. Unions the two archive
 // locations: geozones/archive/ (fed by the daily IAA checker) and the older
