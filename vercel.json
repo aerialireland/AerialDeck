@@ -6,12 +6,6 @@
       "includeFiles": "views/**"
     }
   },
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/server.js"
-    }
-  ],
   "crons": [
     {
       "path": "/api/cron/check-iaa-zones",
